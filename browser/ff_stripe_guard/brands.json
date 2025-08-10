@@ -1,0 +1,16 @@
+{
+  "brands": [
+    {
+      "name": "stripe",
+      "official": ["stripe.com"],
+      "keywords": ["stripe", "str1pe"],
+      "notes": "Stripe lookalikes"
+    },
+    {
+      "name": "paypal",
+      "official": ["paypal.com"],
+      "keywords": ["paypal", "paypa1", "pay-pal", "xn--pay"],
+      "notes": "PayPal lookalikes"
+    }
+  ]
+}

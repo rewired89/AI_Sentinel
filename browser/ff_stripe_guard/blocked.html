@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AI Hunter Sentinel— Possible Phishing Blocked</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
+    .card { max-width: 720px; border: 1px solid #ddd; border-radius: 12px; padding: 1.25rem; }
+    h1 { margin: 0 0 .5rem; font-size: 1.4rem; }
+    code { background: #f4f4f4; padding: .15rem .3rem; border-radius: 6px; }
+    ul { margin: .5rem 0 0 1.2rem; }
+    .host { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>⚠️ Navigation Blocked by AI Hunter Sentinel</h1>
+    <p>Access to <span class="host"></span> was blocked because it appears to be a <strong>possible Stripe phishing site</strong>.</p>
+    <p>This is not an internet connection problem — the block is intentional to protect you.</p>
+    <h2>What you should do</h2>
+    <ul>
+      <li>Do not enter any passwords or payment details.</li>
+      <li>Verify that the domain is <code>stripe.com</code> or a legitimate subdomain of <code>stripe.com</code>.</li>
+      <li>If this link came from an email, mark it as <strong>phishing</strong> and delete it.</li>
+    </ul>
+    <p style="margin-top:1rem;color:#666">AI Hunter Sentinel— Stripe Guard</p>
+  </div>
+
+  <script>
+    // Show blocked host in the message
+    const params = new URLSearchParams(location.search);
+    const host = params.get("host") || "";
+    document.querySelector(".host").textContent = host ? host : "the requested domain";
+  </script>
+</body>
+</html>

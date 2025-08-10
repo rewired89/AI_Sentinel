@@ -1,0 +1,451 @@
+[
+  {
+    "cpu_percent": 763.1,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:46:59.216545"
+  },
+  {
+    "cpu_percent": 19.3,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:46:59.216545"
+  },
+  {
+    "cpu_percent": 766.9,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:04.292541"
+  },
+  {
+    "cpu_percent": 9.5,
+    "pid": 11548,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:04.292541"
+  },
+  {
+    "cpu_percent": 768.9,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:09.340098"
+  },
+  {
+    "cpu_percent": 767.6,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:14.381591"
+  },
+  {
+    "cpu_percent": 770.1,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:19.424260"
+  },
+  {
+    "cpu_percent": 10.2,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:19.424260"
+  },
+  {
+    "cpu_percent": 754.7,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:24.464427"
+  },
+  {
+    "cpu_percent": 9.6,
+    "pid": 11548,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:24.464427"
+  },
+  {
+    "cpu_percent": 9.3,
+    "pid": 13972,
+    "name": "taskhostw.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:24.464427"
+  },
+  {
+    "cpu_percent": 756.0,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:29.510805"
+  },
+  {
+    "cpu_percent": 12.4,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:29.510805"
+  },
+  {
+    "cpu_percent": 754.0,
+    "pid": 0,
+    "name": "System Idle Process",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:34.552909"
+  },
+  {
+    "cpu_percent": 12.1,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:47:34.552909"
+  },
+  {
+    "cpu_percent": 11.2,
+    "name": "firefox.exe",
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:54:35.349731"
+  },
+  {
+    "cpu_percent": 11.5,
+    "name": "firefox.exe",
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:54:40.398525"
+  },
+  {
+    "cpu_percent": 16.7,
+    "name": "MemCompression",
+    "pid": 3032,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:54:45.447723"
+  },
+  {
+    "cpu_percent": 10.5,
+    "name": "firefox.exe",
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:54:45.447723"
+  },
+  {
+    "cpu_percent": 9.9,
+    "name": "firefox.exe",
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:55:00.545704"
+  },
+  {
+    "cpu_percent": 11.5,
+    "name": "firefox.exe",
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T14:55:05.590716"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 36.1,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:10:04.854524"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 84.5,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:10:09.919867"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 67.5,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:10:14.967927"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 44.5,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:11:05.272488"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 89.6,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:11:10.328658"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 78.2,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:11:15.386562"
+  },
+  {
+    "name": "firefox.exe",
+    "cpu_percent": 83.5,
+    "pid": 13324,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:11:20.435610"
+  },
+  {
+    "cpu_percent": 64.0,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:28:06.759424"
+  },
+  {
+    "cpu_percent": 76.9,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:28:11.820090"
+  },
+  {
+    "cpu_percent": 80.8,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:28:16.874356"
+  },
+  {
+    "cpu_percent": 44.5,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:28:21.919834"
+  },
+  {
+    "cpu_percent": 50.1,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:29:02.137618"
+  },
+  {
+    "cpu_percent": 85.2,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:29:07.180834"
+  },
+  {
+    "cpu_percent": 81.4,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:29:12.229257"
+  },
+  {
+    "cpu_percent": 91.4,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:30:17.610572"
+  },
+  {
+    "cpu_percent": 82.6,
+    "pid": 13324,
+    "name": "firefox.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:30:22.658927"
+  },
+  {
+    "cpu_percent": 24.3,
+    "name": "System",
+    "pid": 4,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:39:34.714455"
+  },
+  {
+    "cpu_percent": 42.6,
+    "name": "Taskmgr.exe",
+    "pid": 2688,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:39:49.826097"
+  },
+  {
+    "cpu_percent": 40.2,
+    "name": "Taskmgr.exe",
+    "pid": 2688,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:39:54.881151"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 40.1,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:00.157422"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 44.4,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:00.157422"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 46.9,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:05.218940"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 50.0,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:05.218940"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 42.4,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:10.272917"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 52.6,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:10.272917"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 52.8,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:15.333113"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 40.8,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:15.333113"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 45.9,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:20.404442"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 46.8,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:20.404442"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 53.8,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:25.462840"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 44.5,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:25.462840"
+  },
+  {
+    "name": "pwsh.exe",
+    "pid": 11992,
+    "cpu_percent": 53.1,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:30.527488"
+  },
+  {
+    "name": "conhost.exe",
+    "pid": 16104,
+    "cpu_percent": 39.8,
+    "prediction": -1,
+    "timestamp": "2025-08-04T15:42:30.527488"
+  },
+  {
+    "pid": 15648,
+    "cpu_percent": 97.4,
+    "name": "pwsh.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T16:01:41.858572"
+  },
+  {
+    "pid": 15648,
+    "cpu_percent": 88.8,
+    "name": "pwsh.exe",
+    "prediction": -1,
+    "timestamp": "2025-08-04T16:01:51.970363"
+  },
+  {
+    "pid": 6692,
+    "name": "python.exe",
+    "cpu_percent": 100.1,
+    "prediction": -1,
+    "timestamp": "2025-08-04T16:17:35.463422"
+  },
+  {
+    "cpu_percent": 10.8,
+    "username": "REWIRED89\\melas",
+    "pid": 9772,
+    "name": "msedgewebview2.exe",
+    "timestamp": "2025-08-04T16:28:52.651254"
+  },
+  {
+    "pid": 17236,
+    "cpu_percent": 14.8,
+    "username": "REWIRED89\\melas",
+    "name": "msedgewebview2.exe",
+    "timestamp": "2025-08-04T16:34:13.247867",
+    "prediction": -1
+  },
+  {
+    "username": "REWIRED89\\melas",
+    "cpu_percent": 25.1,
+    "name": "msedge.exe",
+    "pid": 17092,
+    "timestamp": "2025-08-04T16:48:19.907224",
+    "prediction": -1
+  },
+  {
+    "name": "SearchProtocolHost.exe",
+    "username": "NT AUTHORITY\\SYSTEM",
+    "pid": 8692,
+    "cpu_percent": 49.9,
+    "memory_rss": 9.62,
+    "timestamp": "2025-08-04T17:00:59.428012",
+    "prediction": -1
+  },
+  {
+    "name": "SearchProtocolHost.exe",
+    "username": "NT AUTHORITY\\SYSTEM",
+    "pid": 8764,
+    "cpu_percent": 54.0,
+    "memory_rss": 18.15,
+    "timestamp": "2025-08-04T17:01:19.803876",
+    "prediction": -1
+  },
+  {
+    "pid": 8040,
+    "username": "REWIRED89\\melas",
+    "name": "mimikatz.exe",
+    "cpu_percent": 0.0,
+    "memory_rss": 76.5,
+    "timestamp": "2025-08-04T17:15:00.773792",
+    "prediction": 1
+  }
+]

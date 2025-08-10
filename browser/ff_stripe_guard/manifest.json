@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "name": "AI Hunter Sentinel — Phishing Guard",
+  "version": "0.4.0",
+  "description": "Blocks lookalike phishing domains (Stripe, PayPal) and shows an explanation page. Pre-click protection in Gmail.",
+  "permissions": [
+    "<all_urls>",
+    "webRequest",
+    "webRequestBlocking",
+    "tabs",
+    "notifications"
+  ],
+  "background": { "scripts": ["background.js"] },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["gmail_guard.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    "blocked.html",
+    "brands.json",
+    "icons/warn-48.png"
+  ],
+  "applications": {
+    "gecko": { "id": "stripe-guard@aihunter", "strict_min_version": "91.0" }
+  }
+}
