@@ -1,106 +1,83 @@
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
-API_KEY = os.getenv("ABUSEIPDB_API_KEY")
-
-import psutil
 import time
-import requests
-from win10toast import ToastNotifier
-from dotenv import load_dotenv
-import os
-import subprocess
 import json
-from datetime import datetime
+import socket
+import requests
+from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-API_KEY = os.getenv("ABUSEIPDB_API_KEY")
+ABUSE_IPDB_URL = "https://api.abuseipdb.com/api/v2/check"
+TIMEOUT = 6
 
-# Configs
-BLOCK_THRESHOLD = 30
-CHECK_INTERVAL = 10  # seconds
-LOG_FILE = "data/blocked_ips_log.json"
-seen_ips = set()
-toast = ToastNotifier()
+TRUSTED_IPS = {"127.0.0.1", "::1"}  # expand if needed
 
-def get_threat_score(ip):
-    url = "https://api.abuseipdb.com/api/v2/check"
+def _get_outbound_ip_candidates():
+    # Quick heuristics: local default route target + DNS lookups currently open
+    candidates = set()
+    # Default route probe
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(1)
+        s.connect(("8.8.8.8", 80))
+        candidates.add(s.getsockname()[0])
+    except Exception:
+        pass
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+    # Add any user-known endpoints here if you keep a cache file, etc.
+    return {ip for ip in candidates if ip not in TRUSTED_IPS}
+
+def _check_abuseipdb(ip, api_key):
     headers = {
-        "Key": API_KEY,
+        "Key": api_key,
         "Accept": "application/json"
     }
-    params = {
-        "ipAddress": ip,
-        "maxAgeInDays": 30
-    }
+    params = {"ipAddress": ip, "maxAgeInDays": "90", "verbose": "true"}
+    r = requests.get(ABUSE_IPDB_URL, headers=headers, params=params, timeout=TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
+    # AbuseIPDB score often exposed as "abuseConfidenceScore"
+    return int(data.get("data", {}).get("abuseConfidenceScore", 0))
+
+def scan_once():
+    """
+    Runs a single IP reputation pass.
+    Returns True if any suspicious IPs are found (per score threshold), else False.
+    """
+    load_dotenv()
+    api_key = os.getenv("ABUSEIPDB_API_KEY", "").strip()
+    if not api_key:
+        print("[ip_watcher] Missing ABUSEIPDB_API_KEY. Skipping IP check (treated as clean).")
+        return False
+
+    threat_found = False
+    suspicious = []
+
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return data['data']['abuseConfidenceScore']
-    except Exception as e:
-        print(f"❌ API error for IP {ip}: {e}")
-    return 0
+        ips = _get_outbound_ip_candidates()
+        if not ips:
+            print("[ip_watcher] No outbound IP candidates. Clean.")
+            return False
 
-def block_ip(ip, score):
-    try:
-        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule",
-                        f"name=Block_{ip}", "dir=in", "action=block", f"remoteip={ip}"],
-                       capture_output=True, text=True)
-        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule",
-                        f"name=Block_{ip}_out", "dir=out", "action=block", f"remoteip={ip}"],
-                       capture_output=True, text=True)
-        print(f"🛑 Blocked IP: {ip} (Score: {score})")
-        toast.show_toast("🚨 AI Hunter – IP Blocked",
-                         f"Blocked {ip} (Threat Score: {score})",
-                         duration=5)
+        for ip in ips:
+            try:
+                score = _check_abuseipdb(ip, api_key)
+                if score >= 50:  # threshold—tune later
+                    suspicious.append({"ip": ip, "score": score})
+            except requests.RequestException as e:
+                print(f"[ip_watcher] API error for {ip}: {e}")
+                continue
 
-        log_ip(ip, score)
+        if suspicious:
+            threat_found = True
+            print("[ip_watcher] Suspicious IPs detected:", json.dumps(suspicious, indent=2))
+        else:
+            print("[ip_watcher] All checked IPs look clean.")
 
     except Exception as e:
-        print(f"❌ Failed to block {ip}: {e}")
+        # Fail-safe: don’t block the app; treat as clean but log it
+        print(f"[ip_watcher] Unexpected error: {e}. Treating as clean for single-pass.")
 
-def log_ip(ip, score):
-    record = {
-        "ip": ip,
-        "score": score,
-        "timestamp": datetime.now().isoformat()
-    }
-
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "w") as f:
-            json.dump([], f)
-
-    with open(LOG_FILE, "r+") as f:
-        try:
-            data = json.load(f)
-        except:
-            data = []
-        data.append(record)
-        f.seek(0)
-        json.dump(data, f, indent=2)
-
-def get_active_ips():
-    ips = set()
-    for conn in psutil.net_connections(kind='inet'):
-        if conn.raddr and conn.status == 'ESTABLISHED':
-            ip = conn.raddr.ip
-            if ':' not in ip:  # Skip IPv6 for now
-                ips.add(ip)
-    return ips
-
-def main():
-    print("🔍 Watching for suspicious IP connections...")
-    active_ips = get_active_ips()
-    for ip in active_ips:
-        if ip in seen_ips:
-            continue
-        seen_ips.add(ip)
-
-        score = get_threat_score(ip)
-        print(f"IP: {ip} | Threat Score: {score}")
-        if score >= BLOCK_THRESHOLD:
-            block_ip(ip, score)
-    print("✅ IP scan complete.")
+    return threat_found

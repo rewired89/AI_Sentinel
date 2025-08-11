@@ -101,3 +101,11 @@
 [2025-08-04 23:24:01] Checked | IP: 18.97.36.46 | Domain: ec2-18-97-36-46.compute-1.amazonaws.com | Score: 0
 [2025-08-04 23:24:06] Checked | IP: 140.82.113.26 | Domain: lb-140-82-113-26-iad.github.com | Score: 0
 [2025-08-04 23:24:06] Checked | IP: 127.0.0.1 | Domain: Rewired89 | Score: 0
+{"ts": "2025-08-11 00:38:07", "event": "domain_checked", "ip": "127.0.0.1", "domain": "Rewired89", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:55:36", "event": "domain_checked", "ip": "185.199.109.154", "domain": "cdn-185-199-109-154.github.com", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:55:50", "event": "domain_checked", "ip": "127.0.0.1", "domain": "Rewired89", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:55:55", "event": "domain_checked", "ip": "140.82.112.22", "domain": "lb-140-82-112-22-iad.github.com", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:56:00", "event": "domain_checked", "ip": "140.82.113.25", "domain": "lb-140-82-113-25-iad.github.com", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:57:14", "event": "domain_checked", "ip": "140.82.113.25", "domain": "lb-140-82-113-25-iad.github.com", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:57:14", "event": "domain_checked", "ip": "140.82.112.22", "domain": "lb-140-82-112-22-iad.github.com", "vt_score": 0, "extra": {}}
+{"ts": "2025-08-11 01:57:19", "event": "domain_checked", "ip": "127.0.0.1", "domain": "Rewired89", "vt_score": 0, "extra": {}}

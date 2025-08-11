@@ -447,5 +447,95 @@
     "memory_rss": 76.5,
     "timestamp": "2025-08-04T17:15:00.773792",
     "prediction": 1
+  },
+  {
+    "pid": 1108,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cpu_percent": 104.0,
+    "memory_rss": 14.74,
+    "timestamp": "2025-08-11T13:00:49.056843"
+  },
+  {
+    "pid": 16040,
+    "name": "firefox.exe",
+    "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+    "username": "REWIRED89\\melas",
+    "cpu_percent": 0.0,
+    "memory_rss": 1022.33,
+    "timestamp": "2025-08-11T13:00:49.056843"
+  },
+  {
+    "pid": 8228,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 0.0,
+    "memory_rss": 3.88
+  },
+  {
+    "pid": 12676,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 100.0,
+    "memory_rss": 10.55
+  },
+  {
+    "pid": 4692,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 0.0,
+    "memory_rss": 3.88
+  },
+  {
+    "pid": 11128,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 100.1,
+    "memory_rss": 10.58
+  },
+  {
+    "pid": 9136,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 100.0,
+    "memory_rss": 10.57
+  },
+  {
+    "pid": 13244,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 0.0,
+    "memory_rss": 3.89
+  },
+  {
+    "pid": 1908,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 100.0,
+    "memory_rss": 10.54
+  },
+  {
+    "pid": 3528,
+    "name": "python.exe",
+    "exe": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe",
+    "username": "REWIRED89\\melas",
+    "cmdline": "C:\\Users\\melas\\Desktop\\AI-Hunter\\venv\\Scripts\\python.exe C:\\Users\\melas\\Desktop\\AI-Hunter\\cpu_hog_strong.py",
+    "cpu_percent": 0.0,
+    "memory_rss": 3.89
   }
 ]

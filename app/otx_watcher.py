@@ -76,3 +76,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def scan_once() -> int:
+    """One pass: fetch OTX pulse IPs and block any currently connected."""
+    blocked = 0
+    otx_ips = fetch_otx_ips()
+    print(f"🔎 IPs to watch: {otx_ips}")
+    active = get_active_ips()
+    print(f"📡 Active connections: {active}")
+    for ip in active:
+        if ip in otx_ips:
+            block_ip(ip)
+            blocked += 1
+    print("✅ OTX scan complete.")
+    return blocked
+
