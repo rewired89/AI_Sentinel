@@ -1,6 +1,5 @@
-# app/detect_anomalies.py
 from win10toast import ToastNotifier
-from trust import is_signed_by_trusted_publisher
+from app.trust import is_signed_by_trusted_publisher
 import psutil
 import time
 import pandas as pd
@@ -17,7 +16,7 @@ from datetime import datetime
 TEST_MODE = os.getenv("AIHUNTER_TEST_MODE", "0") == "1"
 
 # ---- Central allowlist ----
-from allowlist import WHITELIST_NAMES, SAFE_PATH_KEYWORDS
+from app.allowlist import WHITELIST_NAMES, SAFE_PATH_KEYWORDS
 
 # ---- Thresholds / files
 MODEL_FILE = "model/anomaly_detector.pkl"
