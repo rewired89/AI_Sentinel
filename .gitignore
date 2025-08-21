@@ -1,0 +1,5 @@
+
+# Ignore local support packs
+AIHunter_Support_*/
+AIHunter_SupportPack_*.zip
+
