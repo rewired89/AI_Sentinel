@@ -122,40 +122,76 @@ def _resolve_download_url() -> tuple[str, bool]:
 
 def _detect_format(path: Path) -> str:
     """
-    Read the first bytes of a downloaded file and return its actual format:
-    'zip', 'gz', 'bz2', 'xz', or 'exe' (bare PE binary).
+    Identify file format by magic bytes — completely independent of filename or
+    Content-Type, so Nym's extensionless assets are handled correctly.
     """
     with open(path, "rb") as f:
         magic = f.read(8)
 
-    if magic[:2] == b"PK":          return "zip"
-    if magic[:2] == b"\x1f\x8b":   return "gz"
-    if magic[:3] == b"BZh":        return "bz2"
-    if magic[:6] == b"\xfd7zXZ\x00": return "xz"
-    if magic[:2] == b"MZ":         return "exe"   # Windows PE executable
+    if magic[:2]  == b"PK":               return "zip"
+    if magic[:2]  == b"\x1f\x8b":         return "gz"
+    if magic[:3]  == b"BZh":              return "bz2"
+    if magic[:6]  == b"\xfd7zXZ\x00":     return "xz"
+    if magic[:2]  == b"MZ":               return "exe"   # Windows PE
+    if magic[:4]  == b"\x7fELF":          return "elf"   # Linux ELF
+    if magic[:4]  == b"\xcf\xfa\xed\xfe": return "macho" # macOS Mach-O
     return "unknown"
 
 
+def _download_file(url: str, dest: Path) -> None:
+    """
+    Download url → dest using requests with the headers GitHub needs to serve
+    raw binary assets (including extensionless ones).
+    Falls back to urllib if requests isn't available.
+    """
+    headers = {
+        "User-Agent": "AI-Sentinel/1.0",
+        "Accept":     "application/octet-stream",
+    }
+    try:
+        import requests as _req
+        with _req.get(url, headers=headers, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            total   = int(r.headers.get("content-length", 0))
+            written = 0
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    f.write(chunk)
+                    written += len(chunk)
+                    if total:
+                        pct = min(100, written * 100 // total)
+                        print(f"\r[nym] Download: {pct}%", end="", flush=True)
+        print()
+    except ImportError:
+        # requests not installed — fall back to urllib (less reliable for GitHub)
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as f:
+            f.write(resp.read())
+
+
 def download() -> None:
-    """Download and unpack (or place) the Nym SOCKS5 client binary."""
+    """Download and install the Nym SOCKS5 client binary."""
     NYM_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Delete any leftover partial download from a previous failed attempt
+    # Remove any leftover partial downloads
     for stale in NYM_DIR.glob("nym_dl.*"):
         stale.unlink(missing_ok=True)
+    (NYM_DIR / "nym_dl.bin").unlink(missing_ok=True)
 
     url, _ = _resolve_download_url()
-    archive = NYM_DIR / "nym_dl.bin"   # neutral name — format detected below
+    archive = NYM_DIR / "nym_dl.bin"
 
     print("[nym] Downloading ...")
-    urllib.request.urlretrieve(url, archive, reporthook=_progress)
-    print()
+    _download_file(url, archive)
 
-    fmt = _detect_format(archive)
-    print(f"[nym] Detected format: {fmt}")
+    fmt   = _detect_format(archive)
+    magic = archive.read_bytes()[:8]
+    print(f"[nym] Detected format: {fmt}  (magic: {magic.hex()})")
 
-    if fmt == "exe":
-        # Nym shipped a bare Windows executable — just move it into place
+    if fmt in ("exe", "elf", "macho"):
+        # Bare binary — move it directly into place
+        if NYM_BIN.exists():
+            NYM_BIN.unlink()
         archive.rename(NYM_BIN)
 
     elif fmt == "zip":
@@ -169,10 +205,15 @@ def download() -> None:
         archive.unlink(missing_ok=True)
 
     else:
+        # Show first 120 bytes as text to help diagnose (e.g. HTML error page)
+        preview = archive.read_bytes()[:120]
         archive.unlink(missing_ok=True)
         raise RuntimeError(
-            f"[nym] Downloaded file has unrecognised format (magic bytes unknown).\n"
-            f"  URL: {url}\n"
+            f"[nym] Downloaded file has unrecognised format.\n"
+            f"  URL     : {url}\n"
+            f"  Magic   : {magic.hex()}\n"
+            f"  Preview : {preview!r}\n"
+            f"  This usually means GitHub returned an error or redirect page.\n"
             f"  Try downloading manually from https://github.com/nymtech/nym/releases"
         )
 
@@ -183,15 +224,16 @@ def download() -> None:
         # Archive may have placed the binary in a sub-folder — find and move it
         found = [
             p for p in NYM_DIR.rglob("nym-socks5-client*")
-            if p.suffix in ("", ".exe") and p != NYM_BIN
+            if p.suffix in ("", ".exe") and p.is_file() and p != NYM_BIN
         ]
         if found:
             found[0].rename(NYM_BIN)
 
     if not NYM_BIN.exists():
         raise RuntimeError(
-            f"[nym] Binary not found after download. Check {NYM_DIR} manually.\n"
-            f"  Expected: {NYM_BIN}"
+            f"[nym] Binary not found after download.\n"
+            f"  Expected : {NYM_BIN}\n"
+            f"  Check    : {NYM_DIR}"
         )
 
     print(f"[nym] Binary ready: {NYM_BIN}")
