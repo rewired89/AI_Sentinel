@@ -3,3 +3,11 @@
 AIHunter_Support_*/
 AIHunter_SupportPack_*.zip
 
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated identity and Nym data (never commit private keys or binaries)
+data/identity/
+data/nym/

@@ -1,4 +1,5 @@
-// AI Hunter Sentinel — Background blocker with brand config (Stripe + PayPal)
+// AI Hunter Sentinel — Privacy Guard
+// Handles: phishing brand blocking, Sentinel proxy routing, deanon alerts.
 
 // --- Config loading ---
 let BRANDS = [
@@ -96,3 +97,91 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     catch { browser.tabs.remove(tabId).catch(() => {}); }
   }
 });
+
+// ---------------------------------------------------------------------------
+// Sentinel Proxy routing
+// The AI Sentinel privacy proxy runs on 127.0.0.1:8877 and routes all traffic
+// through the Nym mixnet while scanning for threats. Configure Firefox to use
+// it whenever it is reachable; fall back to direct when it isn't running.
+// ---------------------------------------------------------------------------
+
+const SENTINEL_PROXY = { host: "127.0.0.1", port: 8877 };
+
+async function isSentinelProxyUp() {
+  // We can't open raw TCP sockets from an extension; instead we try a fetch to
+  // the mitmproxy magic-host URL — if the proxy is up it responds with its CA
+  // info page; if down the fetch fails. Timeout of 1 s keeps this snappy.
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 1000);
+    await fetch("http://mitm.it/", { signal: ctrl.signal, mode: "no-cors" });
+    clearTimeout(tid);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function applyProxySettings() {
+  const up = await isSentinelProxyUp();
+  if (up) {
+    browser.proxy.settings.set({
+      value: {
+        proxyType:   "manual",
+        http:        `${SENTINEL_PROXY.host}:${SENTINEL_PROXY.port}`,
+        ssl:         `${SENTINEL_PROXY.host}:${SENTINEL_PROXY.port}`,
+        socks:       `${SENTINEL_PROXY.host}:${SENTINEL_PROXY.port}`,
+        socksVersion: 5,
+        proxyDNS:    true,
+      },
+      scope: "regular",
+    }).catch(() => {});
+    console.log("[sentinel] Proxy active → 127.0.0.1:8877 (Nym mixnet routing)");
+  } else {
+    browser.proxy.settings.clear({ scope: "regular" }).catch(() => {});
+    console.log("[sentinel] Proxy not detected — using direct connection.");
+  }
+}
+
+// Check on startup and every 30 s so the extension adapts when the user
+// starts or stops the privacy layer without restarting Firefox.
+applyProxySettings();
+setInterval(applyProxySettings, 30_000);
+
+// ---------------------------------------------------------------------------
+// De-anonymization alert
+// The scanning proxy injects X-Sentinel-Warning into any response where it
+// detects fingerprinting or IP-leak JavaScript. We intercept that header here
+// and show the user a native notification with the specific technique caught.
+// ---------------------------------------------------------------------------
+
+browser.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    const warning = details.responseHeaders?.find(
+      (h) => h.name.toLowerCase() === "x-sentinel-warning"
+    );
+    if (!warning) return {};
+
+    const value   = warning.value || "";
+    const host    = hostOf(details.url);
+    const cats    = value.replace(/^deanon:/, "").split(",").join(", ");
+
+    try {
+      browser.notifications.create({
+        type:     "basic",
+        iconUrl:  "icons/warn-48.png",
+        title:    "AI Sentinel — De-Anonymization Attempt Blocked",
+        message:  `${host} tried: ${cats}`,
+      });
+    } catch (_) {}
+
+    // Strip the header before it reaches the page — no need to expose internals.
+    return {
+      responseHeaders: details.responseHeaders.filter(
+        (h) => h.name.toLowerCase() !== "x-sentinel-warning"
+      ),
+    };
+  },
+  { urls: ["<all_urls>"] },
+  ["blocking", "responseHeaders"]
+);
