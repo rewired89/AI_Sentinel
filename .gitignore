@@ -11,3 +11,7 @@ __pycache__/
 # Generated identity and Nym data (never commit private keys or binaries)
 data/identity/
 data/nym/
+
+# Runtime alert and threat logs (user-specific, generated at runtime)
+data/alerts_human.json
+data/privacy_threats.json
