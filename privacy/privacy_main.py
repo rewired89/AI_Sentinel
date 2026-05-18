@@ -1,0 +1,237 @@
+"""
+AI Sentinel — Privacy Layer entry point.
+
+Usage:
+    python -m privacy.privacy_main [--no-nym] [--proxy-port 8877]
+
+What this does:
+  1. Loads / generates your Ed25519 identity (public key = your only address).
+  2. Starts the Nym SOCKS5 client (anonymous mixnet routing).
+  3. Starts the AI Sentinel scanning proxy (mitmproxy addon) on --proxy-port.
+     All traffic flowing through the proxy is scanned for malware, C2 beacons,
+     and de-anonymization attempts before reaching you or the network.
+  4. Sets the Windows system proxy to 127.0.0.1:<proxy-port> so all
+     WinINet-based traffic goes through this stack automatically.
+  5. On Ctrl-C: clears the system proxy and shuts everything down cleanly.
+
+First run:
+  • Nym binary (~15 MB) will be downloaded and a mixnet identity initialised.
+  • mitmproxy will generate a CA certificate at %USERPROFILE%\.mitmproxy\
+  • Run `setup_certificates()` below (or call privacy_main.py --setup-certs)
+    to install the CA cert into Windows so HTTPS scanning works in all apps.
+"""
+import os
+import sys
+import time
+import signal
+import shutil
+import argparse
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+
+from dotenv import load_dotenv
+from privacy import identity as _identity
+from privacy.routing import nym_client as _nym
+
+PROXY_HOST = "127.0.0.1"
+PROXY_PORT  = 8877
+
+
+# ---------------------------------------------------------------------------
+# Windows system proxy helpers
+# ---------------------------------------------------------------------------
+
+def _set_system_proxy(host: str, port: int) -> None:
+    """Point Windows system proxy (WinINet/WinHTTP) at our local scanning proxy."""
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            0, winreg.KEY_SET_VALUE,
+        )
+        winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"{host}:{port}")
+        winreg.SetValueEx(key, "ProxyEnable",  0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+        print(f"[privacy] System proxy → {host}:{port}")
+    except ImportError:
+        print(f"[privacy] (non-Windows) Set your proxy manually to {host}:{port}")
+    except Exception as exc:
+        print(f"[privacy] Could not set system proxy: {exc}")
+
+
+def _clear_system_proxy() -> None:
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            0, winreg.KEY_SET_VALUE,
+        )
+        winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(key)
+        print("[privacy] System proxy cleared.")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# CA certificate installation (run once so HTTPS scanning works)
+# ---------------------------------------------------------------------------
+
+def setup_certificates() -> None:
+    """
+    Install mitmproxy's CA certificate into the Windows trust store.
+    Must be run once (as Administrator) before HTTPS interception works.
+    """
+    cert_candidates = [
+        Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.cer",
+        Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.p12",
+    ]
+
+    # Generate the cert by starting mitmdump briefly if it doesn't exist yet
+    if not any(c.exists() for c in cert_candidates):
+        print("[privacy] Generating mitmproxy CA certificate ...")
+        mitmdump = shutil.which("mitmdump")
+        if not mitmdump:
+            print("[privacy] mitmdump not found. Run: pip install mitmproxy")
+            return
+        proc = subprocess.Popen([mitmdump, "--quiet", "--listen-port", "18877"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(3)
+        proc.terminate()
+        proc.wait()
+
+    cert_path = next((c for c in cert_candidates if c.exists()), None)
+    if not cert_path:
+        print("[privacy] Could not locate mitmproxy CA cert. Run mitmdump once first.")
+        return
+
+    print(f"[privacy] Installing CA cert: {cert_path}")
+    result = subprocess.run(
+        ["certutil", "-addstore", "-user", "Root", str(cert_path)],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        print("[privacy] CA certificate installed. HTTPS scanning is active.")
+    else:
+        print(f"[privacy] certutil failed: {result.stderr.strip()}")
+        print("[privacy] Try running as Administrator or install the cert manually.")
+
+
+# ---------------------------------------------------------------------------
+# Scanning proxy launcher
+# ---------------------------------------------------------------------------
+
+def _start_proxy(upstream: str | None, port: int) -> subprocess.Popen:
+    addon = Path(__file__).parent / "proxy" / "sentinel_proxy.py"
+    mitmdump = shutil.which("mitmdump")
+    if not mitmdump:
+        sys.exit("[privacy] ERROR: mitmdump not found. Run: pip install mitmproxy")
+
+    cmd = [
+        mitmdump,
+        "--listen-host", PROXY_HOST,
+        "--listen-port", str(port),
+        "-s", str(addon),
+        "--set", "ssl_insecure=true",
+        "--quiet",
+    ]
+    if upstream:
+        cmd += ["--mode", f"upstream:{upstream}"]
+
+    print(f"[privacy] Scanning proxy on {PROXY_HOST}:{port}"
+          + (f" → Nym {upstream}" if upstream else " (direct, no Nym)"))
+    return subprocess.Popen(cmd, cwd=str(ROOT))
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    load_dotenv(ROOT / "app" / ".env")
+
+    parser = argparse.ArgumentParser(description="AI Sentinel Privacy Layer")
+    parser.add_argument("--no-nym",      action="store_true",
+                        help="Skip Nym routing (threat scanning only, no IP anonymisation)")
+    parser.add_argument("--proxy-port",  type=int, default=PROXY_PORT,
+                        help=f"Local scanning proxy port (default: {PROXY_PORT})")
+    parser.add_argument("--setup-certs", action="store_true",
+                        help="Install mitmproxy CA cert then exit")
+    args = parser.parse_args()
+
+    if args.setup_certs:
+        setup_certificates()
+        return
+
+    print("=" * 62)
+    print("  AI SENTINEL — PRIVACY LAYER")
+    print("=" * 62)
+
+    # 1. Cryptographic identity
+    ident = _identity.load_or_create()
+    print(f"\n  Your Sentinel Address (public key — this is your only ID):")
+    print(f"  {ident['address']}\n")
+
+    # 2. Nym routing
+    upstream: str | None = None
+    if not args.no_nym:
+        print("[privacy] Starting Nym mixnet client ...")
+        nym_ok = _nym.start()
+        if nym_ok:
+            upstream = _nym.socks5_upstream()
+        else:
+            print("[privacy] Nym not ready yet — running scanning proxy without anonymous routing.")
+            print("[privacy] Your traffic is scanned but your real IP is NOT hidden.")
+            print("[privacy] Nym often connects within 60 s — restart to retry.")
+    else:
+        print("[privacy] --no-nym: skipping anonymous routing.")
+
+    # 3. Scanning proxy
+    proxy = _start_proxy(upstream, args.proxy_port)
+    time.sleep(1)  # give mitmdump a moment to bind the port
+
+    # 4. System proxy
+    _set_system_proxy(PROXY_HOST, args.proxy_port)
+
+    print(f"""
+[privacy] ACTIVE
+  Scanning proxy  : {PROXY_HOST}:{args.proxy_port}
+  Anonymous route : {"Nym mixnet  ← traffic analysis resistant" if upstream else "DISABLED (--no-nym or Nym not ready)"}
+  Threat layers   : VT domain lookup + OTX pulses + C2 heuristics + Deanon scanner
+  Identity        : {ident['address'][:32]}...
+  Threat log      : data/privacy_threats.json
+
+  Press Ctrl-C to stop and restore normal networking.
+""")
+
+    # 5. Graceful shutdown on SIGINT / SIGTERM
+    def _shutdown(sig, _frame):
+        print("\n[privacy] Shutting down ...")
+        _clear_system_proxy()
+        proxy.terminate()
+        proxy.wait(timeout=5)
+        if not args.no_nym:
+            _nym.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT,  _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
+
+    # 6. Watch the proxy process — restart it if it dies unexpectedly
+    while True:
+        time.sleep(5)
+        if proxy.poll() is not None:
+            print("[privacy] Scanning proxy exited — restarting ...")
+            _clear_system_proxy()
+            proxy = _start_proxy(upstream, args.proxy_port)
+            time.sleep(1)
+            _set_system_proxy(PROXY_HOST, args.proxy_port)
+
+
+if __name__ == "__main__":
+    main()

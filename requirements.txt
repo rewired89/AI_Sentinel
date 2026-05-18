@@ -10,3 +10,7 @@ six==1.17.0
 threadpoolctl==3.6.0
 tzdata==2025.2
 watchdog==6.0.0
+
+# Privacy layer
+cryptography>=42.0.0
+mitmproxy>=10.3.0
