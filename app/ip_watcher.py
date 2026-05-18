@@ -9,6 +9,15 @@ from dotenv import load_dotenv
 from app.tools.virustotal_client import lookup_ip, lookup_hash
 from app.tools.process_control import kill_and_quarantine
 
+try:
+    from privacy.alerts import notify as _alert
+except ImportError:
+    _alert = None
+
+def _notify(threat_type, **extra):
+    if _alert:
+        _alert(threat_type, extra=extra)
+
 ABUSE_IPDB_URL = "https://api.abuseipdb.com/api/v2/check"
 TIMEOUT = 6
 
@@ -96,6 +105,7 @@ def _vt_enrich_and_act(ips) -> bool:
 
                 if owners:
                     print(f"[ip_watcher] Malicious IP {ip} connected by PIDs: {sorted(owners)} — neutralizing.")
+                    _notify("malicious_ip_blocked", ip=ip, pids=sorted(owners))
                     for pid in list(owners):
                         try:
                             proc = psutil.Process(pid)

@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from mitmproxy import http, ctx
 from privacy.proxy.deanon_detector import scan_response_body
+from privacy.alerts import notify, notify_deanon
 
 # ---------------------------------------------------------------------------
 # Domain/IP reputation cache  (TTL = 10 min, thread-safe)
@@ -176,6 +177,7 @@ class SentinelProxyAddon:
                 "host": host,
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
+            notify("c2_beacon", extra={"url": url, "host": host})
             flow.response = http.Response.make(
                 403,
                 b"AI Sentinel: C2 beacon pattern blocked.",
@@ -195,6 +197,7 @@ class SentinelProxyAddon:
                 "host": host,
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
+            notify("malicious_domain", extra={"url": url, "host": host})
             flow.response = http.Response.make(
                 403,
                 f"AI Sentinel: {host} is flagged as malicious.".encode(),
@@ -239,6 +242,7 @@ class SentinelProxyAddon:
             "findings": summary,
             "ts":       datetime.now(timezone.utc).isoformat(),
         })
+        notify_deanon(findings, host=host)
 
         # Inject warning header — the browser extension reads this and shows an alert.
         flow.response.headers["X-Sentinel-Warning"] = (

@@ -6,6 +6,15 @@ import requests
 from win10toast import ToastNotifier
 import subprocess
 
+try:
+    from privacy.alerts import notify as _alert
+except ImportError:
+    _alert = None
+
+def _notify(threat_type, **extra):
+    if _alert:
+        _alert(threat_type, extra=extra)
+
 # Load env vars
 load_dotenv()
 OTX_API_KEY = os.getenv("ALIENVAULT_API_KEY")
@@ -45,6 +54,7 @@ def block_ip(ip):
                        capture_output=True, text=True)
         print(f"🛑 Blocked IP: {ip}")
         toast.show_toast("AI Hunter – OTX Blocked 🚫", f"Blocked malicious IP: {ip}", duration=5)
+        _notify("otx_threat_found", ip=ip)
         BLOCKED_IPS.add(ip)
     except Exception as e:
         print(f"❌ Failed to block {ip}: {e}")

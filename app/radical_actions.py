@@ -10,6 +10,15 @@ from datetime import datetime
 from allowlist import WHITELIST_NAMES, SAFE_PATH_KEYWORDS
 from trust import is_signed_by_trusted_publisher
 
+try:
+    from privacy.alerts import notify as _alert
+except ImportError:
+    _alert = None
+
+def _notify(threat_type, **extra):
+    if _alert:
+        _alert(threat_type, extra=extra)
+
 # ---- Config ----
 STATE_FILE = "data/lockdown_state.json"
 QUARANTINE_DIR = "data/quarantine"
@@ -73,6 +82,7 @@ def network_lockdown_start(allow_programs=None, duration_minutes=15):
         json.dump(state, f, indent=2)
 
     _toast(f"Network lockdown enabled for ~{duration_minutes} min")
+    _notify("kill_switch_activated", duration_minutes=duration_minutes)
 
 def network_lockdown_end():
     """Reverts outbound policy to ALLOW and removes our lockdown rules."""
