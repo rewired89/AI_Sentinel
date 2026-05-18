@@ -82,7 +82,8 @@ def is_downloaded() -> bool:
 def _resolve_download_url() -> tuple[str, bool]:
     """
     Ask the GitHub API for the latest Nym release and return
-    (download_url, is_zip) for this platform's socks5-client asset.
+    (download_url, _unused) for this platform's socks5-client asset.
+    Format detection is now done by reading magic bytes after download.
 
     Tries asset name tiers from strictest to loosest so that a bare
     'nym-socks5-client' asset (Nym's newer single-file releases) is
@@ -119,43 +120,78 @@ def _resolve_download_url() -> tuple[str, bool]:
     )
 
 
+def _detect_format(path: Path) -> str:
+    """
+    Read the first bytes of a downloaded file and return its actual format:
+    'zip', 'gz', 'bz2', 'xz', or 'exe' (bare PE binary).
+    """
+    with open(path, "rb") as f:
+        magic = f.read(8)
+
+    if magic[:2] == b"PK":          return "zip"
+    if magic[:2] == b"\x1f\x8b":   return "gz"
+    if magic[:3] == b"BZh":        return "bz2"
+    if magic[:6] == b"\xfd7zXZ\x00": return "xz"
+    if magic[:2] == b"MZ":         return "exe"   # Windows PE executable
+    return "unknown"
+
+
 def download() -> None:
-    """Download and unpack the Nym SOCKS5 client binary for this OS."""
+    """Download and unpack (or place) the Nym SOCKS5 client binary."""
     NYM_DIR.mkdir(parents=True, exist_ok=True)
 
-    url, is_zip = _resolve_download_url()
-    archive     = NYM_DIR / ("nym_dl.zip" if is_zip else "nym_dl.tar.gz")
+    # Delete any leftover partial download from a previous failed attempt
+    for stale in NYM_DIR.glob("nym_dl.*"):
+        stale.unlink(missing_ok=True)
 
-    print(f"[nym] Downloading ...")
+    url, _ = _resolve_download_url()
+    archive = NYM_DIR / "nym_dl.bin"   # neutral name — format detected below
+
+    print("[nym] Downloading ...")
     urllib.request.urlretrieve(url, archive, reporthook=_progress)
     print()
 
-    print("[nym] Unpacking ...")
-    if is_zip:
+    fmt = _detect_format(archive)
+    print(f"[nym] Detected format: {fmt}")
+
+    if fmt == "exe":
+        # Nym shipped a bare Windows executable — just move it into place
+        archive.rename(NYM_BIN)
+
+    elif fmt == "zip":
         with zipfile.ZipFile(archive) as zf:
             zf.extractall(NYM_DIR)
-    else:
+        archive.unlink(missing_ok=True)
+
+    elif fmt in ("gz", "bz2", "xz"):
         with tarfile.open(archive) as tf:
             tf.extractall(NYM_DIR)
+        archive.unlink(missing_ok=True)
 
-    archive.unlink(missing_ok=True)
+    else:
+        archive.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"[nym] Downloaded file has unrecognised format (magic bytes unknown).\n"
+            f"  URL: {url}\n"
+            f"  Try downloading manually from https://github.com/nymtech/nym/releases"
+        )
 
-    if _SYSTEM != "Windows":
+    if _SYSTEM != "Windows" and NYM_BIN.exists():
         NYM_BIN.chmod(0o755)
 
     if not NYM_BIN.exists():
-        # Some archives place the binary in a sub-folder — find it
+        # Archive may have placed the binary in a sub-folder — find and move it
         found = [
             p for p in NYM_DIR.rglob("nym-socks5-client*")
-            if not p.suffix or p.suffix == ".exe"
+            if p.suffix in ("", ".exe") and p != NYM_BIN
         ]
         if found:
             found[0].rename(NYM_BIN)
 
     if not NYM_BIN.exists():
         raise RuntimeError(
-            f"Binary not found after unpack. Check {NYM_DIR} manually.\n"
-            f"Expected: {NYM_BIN}"
+            f"[nym] Binary not found after download. Check {NYM_DIR} manually.\n"
+            f"  Expected: {NYM_BIN}"
         )
 
     print(f"[nym] Binary ready: {NYM_BIN}")
