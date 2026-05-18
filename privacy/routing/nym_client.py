@@ -38,12 +38,29 @@ NYM_DIR    = Path(__file__).parent.parent.parent / "data" / "nym"
 _SYSTEM    = platform.system()
 NYM_BIN    = NYM_DIR / ("nym-socks5-client.exe" if _SYSTEM == "Windows" else "nym-socks5-client")
 
-# Asset name fragments we look for inside the GitHub release asset list.
-# GitHub API: https://api.github.com/repos/nymtech/nym/releases/latest
-_ASSET_FRAGMENTS = {
-    "Windows": ("nym-socks5-client", "windows", ".zip"),
-    "Linux":   ("nym-socks5-client", "linux",   ".tar.gz"),
-    "Darwin":  ("nym-socks5-client", "darwin",  ".tar.gz"),
+# Platform-specific asset name hints, tried in order from strictest to loosest.
+# Nym has changed their release naming across versions (used to include the
+# target triple like "x86_64-pc-windows-msvc", now sometimes just "nym-socks5-client").
+# We try each tier and accept the first match.
+_ASSET_TIERS = {
+    "Windows": [
+        ("nym-socks5-client", "windows"),   # e.g. nym-socks5-client-windows.zip
+        ("nym-socks5-client", "msvc"),       # e.g. ...-x86_64-pc-windows-msvc.zip
+        ("nym-socks5-client", "win"),        # any "win" variant
+        ("nym-socks5-client",),              # bare name — last resort
+    ],
+    "Linux": [
+        ("nym-socks5-client", "linux"),
+        ("nym-socks5-client", "musl"),
+        ("nym-socks5-client", "gnu"),
+        ("nym-socks5-client",),
+    ],
+    "Darwin": [
+        ("nym-socks5-client", "darwin"),
+        ("nym-socks5-client", "macos"),
+        ("nym-socks5-client", "apple"),
+        ("nym-socks5-client",),
+    ],
 }
 
 GITHUB_API = "https://api.github.com/repos/nymtech/nym/releases/latest"
@@ -62,14 +79,17 @@ def is_downloaded() -> bool:
     return NYM_BIN.exists()
 
 
-def _resolve_download_url() -> str:
+def _resolve_download_url() -> tuple[str, bool]:
     """
-    Ask the GitHub API for the latest Nym release and return the download URL
-    for this platform's socks5-client asset.
-    Raises RuntimeError if nothing matches.
+    Ask the GitHub API for the latest Nym release and return
+    (download_url, is_zip) for this platform's socks5-client asset.
+
+    Tries asset name tiers from strictest to loosest so that a bare
+    'nym-socks5-client' asset (Nym's newer single-file releases) is
+    accepted when no platform-tagged variant exists.
     """
-    frags = _ASSET_FRAGMENTS.get(_SYSTEM)
-    if not frags:
+    tiers = _ASSET_TIERS.get(_SYSTEM)
+    if not tiers:
         raise RuntimeError(f"No Nym binary available for platform: {_SYSTEM}")
 
     print("[nym] Checking GitHub for latest Nym release ...")
@@ -77,22 +97,25 @@ def _resolve_download_url() -> str:
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
 
-    tag  = data.get("tag_name", "unknown")
+    tag    = data.get("tag_name", "unknown")
     assets = data.get("assets", [])
 
-    for asset in assets:
-        name = asset.get("name", "").lower()
-        url  = asset.get("browser_download_url", "")
-        if all(f.lower() in name for f in frags):
-            print(f"[nym] Found asset: {asset['name']}  (release {tag})")
-            return url
+    # Build a lookup: lowercase name → asset dict
+    by_name = {a.get("name", "").lower(): a for a in assets}
+    socks5_assets = [n for n in by_name if "socks5" in n]
 
-    # List what was available so the user can report it
-    available = [a.get("name") for a in assets if "socks5" in a.get("name", "").lower()]
+    for tier in tiers:
+        for name_lower, asset in by_name.items():
+            if all(frag.lower() in name_lower for frag in tier):
+                url    = asset["browser_download_url"]
+                is_zip = url.lower().endswith(".zip") or name_lower.endswith(".exe")
+                print(f"[nym] Asset matched: {asset['name']}  (release {tag})")
+                return url, is_zip
+
     raise RuntimeError(
-        f"No matching Nym socks5-client asset found for {_SYSTEM} in release {tag}.\n"
-        f"  Available socks5 assets: {available}\n"
-        f"  Check https://github.com/nymtech/nym/releases and open a bug."
+        f"No socks5-client asset matched for {_SYSTEM} in Nym release {tag}.\n"
+        f"  All socks5 assets found: {socks5_assets}\n"
+        f"  Visit https://github.com/nymtech/nym/releases to check naming."
     )
 
 
@@ -100,9 +123,8 @@ def download() -> None:
     """Download and unpack the Nym SOCKS5 client binary for this OS."""
     NYM_DIR.mkdir(parents=True, exist_ok=True)
 
-    url      = _resolve_download_url()
-    is_zip   = url.endswith(".zip")
-    archive  = NYM_DIR / ("nym_dl.zip" if is_zip else "nym_dl.tar.gz")
+    url, is_zip = _resolve_download_url()
+    archive     = NYM_DIR / ("nym_dl.zip" if is_zip else "nym_dl.tar.gz")
 
     print(f"[nym] Downloading ...")
     urllib.request.urlretrieve(url, archive, reporthook=_progress)
