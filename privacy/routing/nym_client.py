@@ -21,6 +21,7 @@ Trade-off you must accept:
 import os
 import sys
 import time
+import json
 import socket
 import platform
 import zipfile
@@ -37,24 +38,15 @@ NYM_DIR    = Path(__file__).parent.parent.parent / "data" / "nym"
 _SYSTEM    = platform.system()
 NYM_BIN    = NYM_DIR / ("nym-socks5-client.exe" if _SYSTEM == "Windows" else "nym-socks5-client")
 
-# Pinned to a known-good release. Update when Nym publishes a new stable tag.
-# Check: https://github.com/nymtech/nym/releases
-NYM_VERSION = "2024.9-topdeck"
-
-_DOWNLOAD_URLS = {
-    "Windows": (
-        f"https://github.com/nymtech/nym/releases/download/"
-        f"nym-binaries-v{NYM_VERSION}/nym-socks5-client-x86_64-pc-windows-msvc.zip"
-    ),
-    "Linux": (
-        f"https://github.com/nymtech/nym/releases/download/"
-        f"nym-binaries-v{NYM_VERSION}/nym-socks5-client-x86_64-unknown-linux-musl.tar.gz"
-    ),
-    "Darwin": (
-        f"https://github.com/nymtech/nym/releases/download/"
-        f"nym-binaries-v{NYM_VERSION}/nym-socks5-client-aarch64-apple-darwin.tar.gz"
-    ),
+# Asset name fragments we look for inside the GitHub release asset list.
+# GitHub API: https://api.github.com/repos/nymtech/nym/releases/latest
+_ASSET_FRAGMENTS = {
+    "Windows": ("nym-socks5-client", "windows", ".zip"),
+    "Linux":   ("nym-socks5-client", "linux",   ".tar.gz"),
+    "Darwin":  ("nym-socks5-client", "darwin",  ".tar.gz"),
 }
+
+GITHUB_API = "https://api.github.com/repos/nymtech/nym/releases/latest"
 
 NYM_CONFIG_ID  = "sentinel-client"
 NYM_SOCKS5_PORT = 1080
@@ -70,21 +62,54 @@ def is_downloaded() -> bool:
     return NYM_BIN.exists()
 
 
-def download() -> None:
-    """Download and unpack the Nym SOCKS5 client binary for this OS."""
-    url = _DOWNLOAD_URLS.get(_SYSTEM)
-    if not url:
+def _resolve_download_url() -> str:
+    """
+    Ask the GitHub API for the latest Nym release and return the download URL
+    for this platform's socks5-client asset.
+    Raises RuntimeError if nothing matches.
+    """
+    frags = _ASSET_FRAGMENTS.get(_SYSTEM)
+    if not frags:
         raise RuntimeError(f"No Nym binary available for platform: {_SYSTEM}")
 
-    NYM_DIR.mkdir(parents=True, exist_ok=True)
-    archive = NYM_DIR / ("nym_dl.zip" if _SYSTEM == "Windows" else "nym_dl.tar.gz")
+    print("[nym] Checking GitHub for latest Nym release ...")
+    req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "AI-Sentinel"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read())
 
-    print(f"[nym] Downloading Nym v{NYM_VERSION} ...")
+    tag  = data.get("tag_name", "unknown")
+    assets = data.get("assets", [])
+
+    for asset in assets:
+        name = asset.get("name", "").lower()
+        url  = asset.get("browser_download_url", "")
+        if all(f.lower() in name for f in frags):
+            print(f"[nym] Found asset: {asset['name']}  (release {tag})")
+            return url
+
+    # List what was available so the user can report it
+    available = [a.get("name") for a in assets if "socks5" in a.get("name", "").lower()]
+    raise RuntimeError(
+        f"No matching Nym socks5-client asset found for {_SYSTEM} in release {tag}.\n"
+        f"  Available socks5 assets: {available}\n"
+        f"  Check https://github.com/nymtech/nym/releases and open a bug."
+    )
+
+
+def download() -> None:
+    """Download and unpack the Nym SOCKS5 client binary for this OS."""
+    NYM_DIR.mkdir(parents=True, exist_ok=True)
+
+    url      = _resolve_download_url()
+    is_zip   = url.endswith(".zip")
+    archive  = NYM_DIR / ("nym_dl.zip" if is_zip else "nym_dl.tar.gz")
+
+    print(f"[nym] Downloading ...")
     urllib.request.urlretrieve(url, archive, reporthook=_progress)
     print()
 
     print("[nym] Unpacking ...")
-    if _SYSTEM == "Windows":
+    if is_zip:
         with zipfile.ZipFile(archive) as zf:
             zf.extractall(NYM_DIR)
     else:
@@ -97,10 +122,19 @@ def download() -> None:
         NYM_BIN.chmod(0o755)
 
     if not NYM_BIN.exists():
-        # Some archives nest files — try to find it
-        found = list(NYM_DIR.rglob("nym-socks5-client*"))
+        # Some archives place the binary in a sub-folder — find it
+        found = [
+            p for p in NYM_DIR.rglob("nym-socks5-client*")
+            if not p.suffix or p.suffix == ".exe"
+        ]
         if found:
             found[0].rename(NYM_BIN)
+
+    if not NYM_BIN.exists():
+        raise RuntimeError(
+            f"Binary not found after unpack. Check {NYM_DIR} manually.\n"
+            f"Expected: {NYM_BIN}"
+        )
 
     print(f"[nym] Binary ready: {NYM_BIN}")
 
