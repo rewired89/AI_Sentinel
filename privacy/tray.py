@@ -37,12 +37,24 @@ _state_lock = threading.Lock()
 _tray_icon  = None   # pystray.Icon instance, set once tray starts
 
 
+_PROTECTION_SUMMARY = (
+    "Protecting against:\n"
+    "  • Malware & virus domains\n"
+    "  • Hacker C2 beacons\n"
+    "  • OTX threat intelligence\n"
+    "  • WebRTC IP leaks\n"
+    "  • Canvas fingerprinting\n"
+    "  • Browser tracking libraries\n"
+    "  • Plugin/font enumeration\n"
+    "  • External IP probes"
+)
+
 def _state_label() -> str:
     labels = {
         TrayState.STARTING: "AI Sentinel — Starting...",
-        TrayState.ACTIVE:   "AI Sentinel — ACTIVE (I2P + Scanning)",
-        TrayState.SCANNING: "AI Sentinel — Scanning Only",
-        TrayState.THREAT:   "AI Sentinel — THREAT DETECTED",
+        TrayState.ACTIVE:   "AI Sentinel — ACTIVE  ✓  I2P + Scanning\n" + _PROTECTION_SUMMARY,
+        TrayState.SCANNING: "AI Sentinel — Scanning Only\n" + _PROTECTION_SUMMARY,
+        TrayState.THREAT:   "AI Sentinel — ⚠ THREAT DETECTED\nCheck notification for details.",
         TrayState.STOPPED:  "AI Sentinel — Stopped",
     }
     return labels.get(_state, "AI Sentinel")

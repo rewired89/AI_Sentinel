@@ -46,6 +46,54 @@ PROXY_PORT  = 8877
 
 
 # ---------------------------------------------------------------------------
+# Startup notification
+# ---------------------------------------------------------------------------
+
+_THREAT_TYPES = [
+    "Malware & virus domains (VirusTotal)",
+    "Hacker C2 beacon patterns",
+    "Threat intelligence feeds (OTX/AbuseIPDB)",
+    "WebRTC IP address leaks",
+    "Canvas & device fingerprinting",
+    "Browser tracking libraries (FingerprintJS etc.)",
+    "Plugin & font enumeration tracking",
+    "External IP probe scripts",
+]
+
+def _show_startup_notification(routing: str | None) -> None:
+    """Show a Windows toast telling the user AI Sentinel is active."""
+    route_line = (
+        f"Anonymous routing: {routing}"
+        if routing
+        else "Scanning only — no anonymous routing"
+    )
+    body = (
+        f"{route_line}\n"
+        f"Watching for {len(_THREAT_TYPES)} threat types.\n"
+        "Check the tray icon for live status."
+    )
+    try:
+        from plyer import notification as _notif
+        _notif.notify(
+            title="AI Sentinel is protecting you",
+            message=body,
+            app_name="AI Sentinel",
+            timeout=6,
+        )
+    except Exception:
+        try:
+            from win10toast import ToastNotifier
+            ToastNotifier().show_toast(
+                "AI Sentinel is protecting you",
+                body,
+                duration=6,
+                threaded=True,
+            )
+        except Exception:
+            pass   # no toast library — tray icon is enough
+
+
+# ---------------------------------------------------------------------------
 # Windows system proxy helpers
 # ---------------------------------------------------------------------------
 
@@ -275,6 +323,9 @@ def main() -> None:
 
     # Update tray to reflect actual running state
     _tray.set_state(TrayState.ACTIVE if upstream else TrayState.SCANNING)
+
+    # Show startup notification so the user knows protection is active
+    _show_startup_notification(routing_label if upstream else None)
 
     print(f"""
 [privacy] ACTIVE
