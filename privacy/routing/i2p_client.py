@@ -231,8 +231,6 @@ def download() -> None:
 
 def _write_config() -> None:
     """Write a minimal i2pd.conf that enables SOCKS5 and disables unused services."""
-    if I2P_CONF.exists():
-        return
     I2P_CONF.write_text(
         "[socksproxy]\n"
         "enabled = true\n"
