@@ -63,7 +63,14 @@ _ASSET_TIERS = {
     ],
 }
 
-GITHUB_API = "https://api.github.com/repos/nymtech/nym/releases/latest"
+GITHUB_RELEASES_API = "https://api.github.com/repos/nymtech/nym/releases?per_page=10"
+
+# Formats that are native to this OS — if we download something else, reject it.
+_NATIVE_FORMATS = {
+    "Windows": {"exe", "zip"},        # PE exe or a zip containing one
+    "Linux":   {"elf", "gz", "xz", "bz2"},
+    "Darwin":  {"macho", "gz", "xz", "bz2"},
+}
 
 NYM_CONFIG_ID  = "sentinel-client"
 NYM_SOCKS5_PORT = 1080
@@ -79,44 +86,60 @@ def is_downloaded() -> bool:
     return NYM_BIN.exists()
 
 
-def _resolve_download_url() -> tuple[str, bool]:
+def _resolve_download_url() -> tuple[str, str]:
     """
-    Ask the GitHub API for the latest Nym release and return
-    (download_url, _unused) for this platform's socks5-client asset.
-    Format detection is now done by reading magic bytes after download.
+    Search the last 10 Nym releases for a socks5-client asset that matches
+    this platform. Returns (download_url, release_tag).
 
-    Tries asset name tiers from strictest to loosest so that a bare
-    'nym-socks5-client' asset (Nym's newer single-file releases) is
-    accepted when no platform-tagged variant exists.
+    Newer Nym releases sometimes only ship Linux binaries; this walks back
+    through releases until it finds one with a Windows-compatible asset.
+    Tiers go from strictest name match to loosest so a bare 'nym-socks5-client'
+    is only accepted when no platform-tagged variant exists.
     """
     tiers = _ASSET_TIERS.get(_SYSTEM)
     if not tiers:
         raise RuntimeError(f"No Nym binary available for platform: {_SYSTEM}")
 
-    print("[nym] Checking GitHub for latest Nym release ...")
-    req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "AI-Sentinel"})
+    print("[nym] Checking GitHub for a compatible Nym release ...")
+    req = urllib.request.Request(GITHUB_RELEASES_API, headers={"User-Agent": "AI-Sentinel"})
     with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
+        releases = json.loads(resp.read())
 
-    tag    = data.get("tag_name", "unknown")
-    assets = data.get("assets", [])
+    skipped: list[str] = []
 
-    # Build a lookup: lowercase name → asset dict
-    by_name = {a.get("name", "").lower(): a for a in assets}
-    socks5_assets = [n for n in by_name if "socks5" in n]
+    for release in releases:
+        tag    = release.get("tag_name", "unknown")
+        assets = release.get("assets", [])
+        by_name = {a.get("name", "").lower(): a for a in assets}
 
-    for tier in tiers:
-        for name_lower, asset in by_name.items():
-            if all(frag.lower() in name_lower for frag in tier):
-                url    = asset["browser_download_url"]
-                is_zip = url.lower().endswith(".zip") or name_lower.endswith(".exe")
-                print(f"[nym] Asset matched: {asset['name']}  (release {tag})")
-                return url, is_zip
+        for tier in tiers:
+            for name_lower, asset in by_name.items():
+                if all(frag.lower() in name_lower for frag in tier):
+                    # Reject bare 'nym-socks5-client' assets from releases that
+                    # also contain platform-specific assets — the bare one is
+                    # likely the Linux build named without a suffix.
+                    if tier == ("nym-socks5-client",):
+                        has_platform_asset = any(
+                            "windows" in n or "linux" in n or "darwin" in n
+                            or "msvc" in n or "musl" in n or "apple" in n
+                            for n in by_name
+                            if "socks5" in n
+                        )
+                        if has_platform_asset:
+                            continue  # skip bare asset — platform ones exist
+
+                    url = asset["browser_download_url"]
+                    print(f"[nym] Found: {asset['name']}  (release {tag})")
+                    return url, tag
+
+        socks5_in_release = [n for n in by_name if "socks5" in n]
+        skipped.append(f"{tag}: {socks5_in_release}")
 
     raise RuntimeError(
-        f"No socks5-client asset matched for {_SYSTEM} in Nym release {tag}.\n"
-        f"  All socks5 assets found: {socks5_assets}\n"
-        f"  Visit https://github.com/nymtech/nym/releases to check naming."
+        f"No {_SYSTEM}-compatible socks5-client found in the last {len(releases)} Nym releases.\n"
+        f"  Releases checked: {[r.get('tag_name') for r in releases]}\n"
+        f"  Socks5 assets per release: {skipped}\n"
+        f"  Visit https://github.com/nymtech/nym/releases"
     )
 
 
@@ -178,15 +201,28 @@ def download() -> None:
         stale.unlink(missing_ok=True)
     (NYM_DIR / "nym_dl.bin").unlink(missing_ok=True)
 
-    url, _ = _resolve_download_url()
-    archive = NYM_DIR / "nym_dl.bin"
+    url, tag = _resolve_download_url()
+    archive  = NYM_DIR / "nym_dl.bin"
 
-    print("[nym] Downloading ...")
+    print(f"[nym] Downloading from release {tag} ...")
     _download_file(url, archive)
 
     fmt   = _detect_format(archive)
     magic = archive.read_bytes()[:8]
     print(f"[nym] Detected format: {fmt}  (magic: {magic.hex()})")
+
+    # Sanity-check: reject a binary built for the wrong OS before trying to run it.
+    native = _NATIVE_FORMATS.get(_SYSTEM, set())
+    if native and fmt not in native:
+        preview = archive.read_bytes()[:80]
+        archive.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"[nym] Downloaded binary is not compatible with {_SYSTEM}.\n"
+            f"  Format detected : {fmt}  (magic: {magic.hex()})\n"
+            f"  Expected one of : {native}\n"
+            f"  This release ({tag}) may not ship a {_SYSTEM} build.\n"
+            f"  Preview: {preview!r}"
+        )
 
     if fmt in ("exe", "elf", "macho"):
         # Bare binary — move it directly into place
