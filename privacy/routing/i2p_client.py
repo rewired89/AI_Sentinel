@@ -278,6 +278,8 @@ def start() -> bool:
     print(f"[i2p] Starting i2pd (log → {log_path}) ...")
     print("[i2p] First run: allow 2–5 minutes for tunnel building.")
 
+    import platform as _platform
+    _no_window = subprocess.CREATE_NO_WINDOW if _platform.system() == "Windows" else 0
     with open(log_path, "a") as lf:
         _i2p_proc = subprocess.Popen(
             [
@@ -290,6 +292,7 @@ def start() -> bool:
             stdout=lf,
             stderr=lf,
             cwd=str(I2P_DIR),
+            creationflags=_no_window,
         )
 
     # Poll for SOCKS5 port — up to 60 s (port opens before tunnels are ready)

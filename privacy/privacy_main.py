@@ -78,35 +78,24 @@ _THREAT_TYPES = [
 
 def _show_startup_notification(routing: str | None) -> None:
     """Show a Windows toast telling the user AI Sentinel is active."""
-    route_line = (
-        f"Anonymous routing: {routing}"
-        if routing
-        else "Scanning only — no anonymous routing"
-    )
-    body = (
-        f"{route_line}\n"
-        f"Watching for {len(_THREAT_TYPES)} threat types.\n"
-        "Check the tray icon for live status."
-    )
+    route = routing if routing else "Scanning only"
+    body  = f"{route} · {len(_THREAT_TYPES)} threat types monitored"
     try:
         from plyer import notification as _notif
         _notif.notify(
-            title="AI Sentinel is protecting you",
+            title="AI Sentinel — Active",
             message=body,
             app_name="AI Sentinel",
-            timeout=6,
+            timeout=5,
         )
     except Exception:
         try:
             from win10toast import ToastNotifier
             ToastNotifier().show_toast(
-                "AI Sentinel is protecting you",
-                body,
-                duration=6,
-                threaded=True,
+                "AI Sentinel — Active", body, duration=5, threaded=True,
             )
         except Exception:
-            pass   # no toast library — tray icon is enough
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +203,8 @@ def _start_proxy(upstream: str | None, port: int) -> subprocess.Popen:
 
     print(f"[privacy] Scanning proxy on {PROXY_HOST}:{port}"
           + (f" → {upstream}" if upstream else " (direct, no anonymous routing)"))
-    return subprocess.Popen(cmd, cwd=str(ROOT))
+    _no_window = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    return subprocess.Popen(cmd, cwd=str(ROOT), creationflags=_no_window)
 
 
 # ---------------------------------------------------------------------------
