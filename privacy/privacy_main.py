@@ -27,6 +27,8 @@ import signal
 import shutil
 import argparse
 import subprocess
+import threading
+import urllib.parse as _urlparse
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -218,11 +220,28 @@ def main() -> None:
             _i2p.stop()
         sys.exit(0)
 
-    # 3. Scanning proxy
+    # 3. If routing is SOCKS5, bridge it to HTTP so mitmproxy can chain through it.
+    #    mitmproxy --mode upstream only accepts http:// — not socks5://.
+    if upstream and upstream.startswith("socks5://"):
+        from privacy.routing import socks5_bridge as _bridge
+        parsed     = _urlparse.urlparse(upstream)
+        s5_host    = parsed.hostname or "127.0.0.1"
+        s5_port    = parsed.port    or 1080
+        bridge_thread = threading.Thread(
+            target=_bridge.run,
+            kwargs={"bridge_port": 8878, "socks5_host": s5_host, "socks5_port": s5_port},
+            daemon=True,
+            name="socks5-bridge",
+        )
+        bridge_thread.start()
+        time.sleep(0.3)           # let the asyncio server bind
+        upstream = "http://127.0.0.1:8878"
+
+    # 5. Scanning proxy
     proxy = _start_proxy(upstream, args.proxy_port)
     time.sleep(1)  # give mitmdump a moment to bind the port
 
-    # 4. System proxy
+    # 6. System proxy
     _set_system_proxy(PROXY_HOST, args.proxy_port)
 
     print(f"""
@@ -236,7 +255,7 @@ def main() -> None:
   Press Ctrl-C to stop and restore normal networking.
 """)
 
-    # 5. Graceful shutdown on SIGINT / SIGTERM
+    # 7. Graceful shutdown on SIGINT / SIGTERM
     def _shutdown(sig, _frame):
         print("\n[privacy] Shutting down ...")
         _clear_system_proxy()
@@ -251,7 +270,7 @@ def main() -> None:
     signal.signal(signal.SIGINT,  _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    # 6. Watch the proxy process — restart it if it dies unexpectedly.
+    # 8. Watch the proxy process — restart it if it dies unexpectedly.
     #    Give up after 3 consecutive fast failures (< 10 s) to avoid an
     #    infinite loop when mitmproxy itself has a startup error.
     consecutive_failures = 0
