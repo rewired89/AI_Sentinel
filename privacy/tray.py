@@ -11,181 +11,187 @@ States:
   GREY   — STARTING / STOPPED
 
 Requires: pip install pystray pillow
-If pystray is not installed the tray starts in no-op mode (no error).
 """
 import sys
 import time
 import threading
+import traceback
 from pathlib import Path
 from enum import Enum
 
-ROOT = Path(__file__).parent.parent
+ROOT    = Path(__file__).parent.parent
+_LOG    = ROOT / "data" / "sentinel_startup.log"
 sys.path.insert(0, str(ROOT))
 
 
 class TrayState(Enum):
-    STARTING  = "starting"
-    ACTIVE    = "active"       # proxy + routing
-    SCANNING  = "scanning"     # proxy only, no routing
-    THREAT    = "threat"       # threat detected recently
-    STOPPED   = "stopped"
+    STARTING = "starting"
+    ACTIVE   = "active"
+    SCANNING = "scanning"
+    THREAT   = "threat"
+    STOPPED  = "stopped"
 
 
-# Shared state — updated by privacy_main, read by tray thread
 _state      = TrayState.STARTING
 _state_lock = threading.Lock()
-_tray_icon  = None   # pystray.Icon instance, set once tray starts
+_tray_icon  = None
 
 
-_PROTECTION_SUMMARY = (
+def _tray_log(msg: str) -> None:
+    _LOG.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] [tray] {msg}"
+    print(line)
+    try:
+        with open(_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# State label (tooltip text)
+# ---------------------------------------------------------------------------
+
+_SUMMARY = (
     "Protecting against:\n"
-    "  • Malware & virus domains\n"
-    "  • Hacker C2 beacons\n"
-    "  • OTX threat intelligence\n"
-    "  • WebRTC IP leaks\n"
-    "  • Canvas fingerprinting\n"
-    "  • Browser tracking libraries\n"
-    "  • Plugin/font enumeration\n"
-    "  • External IP probes"
+    "  Malware & virus domains\n"
+    "  Hacker C2 beacons\n"
+    "  OTX threat intelligence\n"
+    "  WebRTC IP leaks\n"
+    "  Canvas fingerprinting\n"
+    "  Browser tracking libraries\n"
+    "  Plugin/font enumeration\n"
+    "  External IP probes"
 )
 
-def _state_label() -> str:
-    labels = {
-        TrayState.STARTING: "AI Sentinel — Starting...",
-        TrayState.ACTIVE:   "AI Sentinel — ACTIVE  ✓  I2P + Scanning\n" + _PROTECTION_SUMMARY,
-        TrayState.SCANNING: "AI Sentinel — Scanning Only\n" + _PROTECTION_SUMMARY,
-        TrayState.THREAT:   "AI Sentinel — ⚠ THREAT DETECTED\nCheck notification for details.",
-        TrayState.STOPPED:  "AI Sentinel — Stopped",
-    }
-    return labels.get(_state, "AI Sentinel")
+
+def _label() -> str:
+    with _state_lock:
+        s = _state
+    return {
+        TrayState.STARTING: "AI Sentinel - Starting...",
+        TrayState.ACTIVE:   "AI Sentinel - ACTIVE (I2P + Scanning)\n" + _SUMMARY,
+        TrayState.SCANNING: "AI Sentinel - Scanning Only\n" + _SUMMARY,
+        TrayState.THREAT:   "AI Sentinel - THREAT DETECTED",
+        TrayState.STOPPED:  "AI Sentinel - Stopped",
+    }.get(s, "AI Sentinel")
 
 
 # ---------------------------------------------------------------------------
-# Icon drawing (PIL — no external image files needed)
+# Icon drawing
 # ---------------------------------------------------------------------------
 
-def _draw_icon(state: TrayState):
-    """Draw a 64×64 shield icon in the colour matching the given state."""
-    try:
-        from PIL import Image, ImageDraw
-    except ImportError:
-        return None
-
-    colours = {
+def _make_icon(state: TrayState):
+    from PIL import Image, ImageDraw
+    colour = {
         TrayState.STARTING: "#888888",
-        TrayState.ACTIVE:   "#22c55e",   # green
-        TrayState.SCANNING: "#eab308",   # yellow
-        TrayState.THREAT:   "#ef4444",   # red
-        TrayState.STOPPED:  "#6b7280",   # grey
-    }
-    colour = colours.get(state, "#888888")
+        TrayState.ACTIVE:   "#22c55e",
+        TrayState.SCANNING: "#eab308",
+        TrayState.THREAT:   "#ef4444",
+        TrayState.STOPPED:  "#6b7280",
+    }.get(state, "#888888")
 
-    img  = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    size = 64
+    img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-
-    # Shield outline
-    shield = [
-        (32, 4), (58, 16), (58, 36),
-        (32, 60), (6, 36), (6, 16),
-    ]
-    draw.polygon(shield, fill=colour)
-
-    # White "S" lettermark — use default bitmap font, no external files needed
-    try:
-        from PIL import ImageFont
-        font = ImageFont.load_default()
-        draw.text((24, 22), "S", fill="white", font=font)
-    except Exception:
-        draw.rectangle([26, 20, 38, 44], fill="white")  # fallback: white bar
-
+    # Shield shape
+    draw.polygon([(32,4),(58,16),(58,38),(32,60),(6,38),(6,16)], fill=colour)
+    # White centre rectangle as logo mark
+    draw.rectangle([24, 18, 40, 46], fill="white")
+    draw.rectangle([26, 20, 38, 44], fill=colour)   # cut-out to make an "S"-ish mark
+    draw.rectangle([26, 28, 38, 36], fill="white")  # middle bar
     return img
 
 
 # ---------------------------------------------------------------------------
-# Public API — called from privacy_main.py
+# Public API
 # ---------------------------------------------------------------------------
 
 def set_state(state: TrayState, *, threat_host: str = "") -> None:
-    """Update tray icon state. Thread-safe."""
     global _state
     with _state_lock:
         _state = state
     if _tray_icon:
         try:
-            _tray_icon.icon  = _draw_icon(state)
-            _tray_icon.title = _state_label()
+            _tray_icon.icon  = _make_icon(state)
+            title = _label()
             if state == TrayState.THREAT and threat_host:
-                _tray_icon.title += f"\n{threat_host}"
+                title += f"\n{threat_host}"
+            _tray_icon.title = title
         except Exception:
             pass
 
 
-def _build_menu(stop_callback):
-    try:
-        import pystray
-        return pystray.Menu(
-            pystray.MenuItem(_state_label, None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Open threat log", _open_log),
-            pystray.MenuItem("Stop AI Sentinel", stop_callback),
-        )
-    except ImportError:
-        return None
-
-
-def _open_log():
+def _open_log() -> None:
     import subprocess
     log = ROOT / "data" / "privacy_threats.json"
-    if log.exists():
-        subprocess.Popen(["notepad.exe", str(log)])
+    target = str(log) if log.exists() else str(ROOT / "data")
+    subprocess.Popen(["explorer.exe", target])
 
 
 def start(stop_callback) -> None:
     """
-    Start the tray icon in a daemon thread.
-    stop_callback() is called when the user clicks "Stop AI Sentinel".
-    Returns immediately — tray runs in background.
-    If pystray or Pillow are not installed, silently does nothing.
+    Start the tray icon using pystray.run_detached() — non-blocking,
+    pystray manages its own Win32 message pump thread internally.
+    Falls back gracefully if pystray or Pillow are not installed.
     """
-    try:
-        import pystray
-        from PIL import Image
-    except ImportError:
-        print("[tray] pystray/Pillow not installed — no tray icon. "
-              "Run: pip install pystray pillow")
-        return
-
     global _tray_icon
 
-    icon_img = _draw_icon(TrayState.STARTING) or Image.new("RGB", (64, 64), "#888888")
+    try:
+        import pystray
+    except ImportError:
+        _tray_log("pystray not installed — run: pip install pystray pillow")
+        return
 
-    def _run():
-        global _tray_icon
+    try:
+        from PIL import Image
+    except ImportError:
+        _tray_log("Pillow not installed — run: pip install pillow")
+        return
+
+    try:
+        icon_img = _make_icon(TrayState.STARTING)
+    except Exception as exc:
+        _tray_log(f"Icon draw failed: {exc} — using blank icon")
+        icon_img = Image.new("RGB", (64, 64), color=(136, 136, 136))
+
+    try:
         _tray_icon = pystray.Icon(
             name  = "ai-sentinel",
             icon  = icon_img,
-            title = _state_label(),
+            title = _label(),
             menu  = pystray.Menu(
-                pystray.MenuItem(lambda item: _state_label(), lambda: None, enabled=False),
+                pystray.MenuItem(
+                    text    = lambda item: _label(),
+                    action  = lambda icon, item: None,
+                    enabled = False,
+                ),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Open threat log", lambda: _open_log()),
-                pystray.MenuItem("Stop AI Sentinel", lambda: stop_callback()),
+                pystray.MenuItem(
+                    "Open threat log",
+                    lambda icon, item: _open_log(),
+                ),
+                pystray.MenuItem(
+                    "Stop AI Sentinel",
+                    lambda icon, item: stop_callback(),
+                ),
             ),
         )
-        _tray_icon.run()
-
-    t = threading.Thread(target=_run, daemon=True, name="tray-icon")
-    t.start()
-    print("[tray] System tray icon started.")
+        # run_detached() is non-blocking and manages its own Win32 thread —
+        # more reliable than wrapping run() in our own daemon thread.
+        _tray_icon.run_detached()
+        _tray_log("Tray icon visible in system tray.")
+    except Exception:
+        _tray_log("Tray icon failed to start:\n" + traceback.format_exc())
 
 
 def stop() -> None:
-    """Remove the tray icon (call on shutdown)."""
     global _tray_icon
     if _tray_icon:
         try:
             set_state(TrayState.STOPPED)
-            time.sleep(0.2)
+            time.sleep(0.3)
             _tray_icon.stop()
         except Exception:
             pass
