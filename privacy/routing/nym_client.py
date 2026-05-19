@@ -218,10 +218,14 @@ def download() -> None:
 
     Iterates candidates (most platform-specific first, across all recent
     releases). If a downloaded file turns out to be wrong-OS it is discarded
-    and the next candidate is tried — no crash, no manual intervention needed.
+    and the next candidate is tried.
+
+    If no compatible binary exists for this OS across all checked releases,
+    writes a flag file so future runs skip the download loop entirely.
     """
     NYM_DIR.mkdir(parents=True, exist_ok=True)
-    archive = NYM_DIR / "nym_dl.bin"
+    archive    = NYM_DIR / "nym_dl.bin"
+    no_win_flag = NYM_DIR / "no_windows_binary.flag"
     archive.unlink(missing_ok=True)
 
     candidates = _fetch_candidates()
@@ -245,12 +249,19 @@ def download() -> None:
 
         _install(archive, fmt, url)
         print(f"[nym] Binary ready: {NYM_BIN}")
+        no_win_flag.unlink(missing_ok=True)  # clear flag if it existed
         return
 
+    # All candidates exhausted — write a flag so we never loop again
+    no_win_flag.write_text(
+        f"Checked {len(tried)} releases on {__import__('datetime').date.today()}. "
+        f"None had a {_SYSTEM} binary.\nSkipped: {tried}"
+    )
     raise RuntimeError(
         f"[nym] No compatible {_SYSTEM} binary found after {len(tried)} attempts.\n"
         f"  Skipped: {tried}\n"
-        f"  Visit https://github.com/nymtech/nym/releases"
+        f"  A flag has been written to {no_win_flag} — Nym download will be skipped on future runs.\n"
+        f"  Delete that file to retry."
     )
 
 
@@ -279,8 +290,16 @@ def start() -> bool:
     Ensure the Nym SOCKS5 client is running.
     Downloads + inits on first use.
     Returns True when the SOCKS5 port is accepting connections.
+    Raises RuntimeError immediately if a previous run confirmed no binary exists.
     """
     global _nym_proc
+
+    no_win_flag = NYM_DIR / "no_windows_binary.flag"
+    if no_win_flag.exists():
+        raise RuntimeError(
+            f"[nym] Nym has no {_SYSTEM} binary in recent releases (cached result).\n"
+            f"  Delete {no_win_flag} to retry."
+        )
 
     if not is_downloaded():
         download()

@@ -35,7 +35,6 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 from privacy import identity as _identity
 from privacy.routing import nym_client as _nym
-from privacy.routing import tor_client as _tor
 
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT  = 8877
@@ -158,11 +157,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="AI Sentinel Privacy Layer")
     parser.add_argument("--no-nym",      action="store_true",
-                        help="Skip Nym routing")
-    parser.add_argument("--tor",         action="store_true",
-                        help="Use Tor instead of Nym for anonymous routing")
-    parser.add_argument("--no-routing",  action="store_true",
-                        help="Disable all anonymous routing (scanning proxy only)")
+                        help="Skip anonymous routing (scanning proxy only)")
     parser.add_argument("--proxy-port",  type=int, default=PROXY_PORT,
                         help=f"Local scanning proxy port (default: {PROXY_PORT})")
     parser.add_argument("--setup-certs", action="store_true",
@@ -186,48 +181,20 @@ def main() -> None:
     upstream: str | None = None
     routing_label = "DISABLED"
 
-    if args.no_routing:
-        print("[privacy] --no-routing: scanning proxy only, no IP anonymisation.")
-
-    elif args.tor:
-        print("[privacy] Starting Tor routing ...")
-        try:
-            if _tor.start():
-                upstream      = _tor.socks5_upstream()
-                routing_label = "Tor  (onion routing)"
-            else:
-                print("[privacy] Tor started but port not ready — continuing without routing.")
-        except Exception as exc:
-            print(f"[privacy] Tor failed to start: {exc}")
-            print("[privacy] Continuing with scanning proxy only.")
-
-    elif not args.no_nym:
+    if not args.no_nym:
         print("[privacy] Starting Nym mixnet client ...")
         try:
             if _nym.start():
                 upstream      = _nym.socks5_upstream()
-                routing_label = "Nym mixnet  (timing-attack resistant)"
+                routing_label = "Nym mixnet"
             else:
-                print("[privacy] Nym started but port not ready — continuing without routing.")
+                print("[privacy] Nym port did not open — scanning proxy will run without routing.")
         except RuntimeError as exc:
-            # Nym has no Windows binary in recent releases — fall back to Tor automatically.
-            if "No compatible Windows binary" in str(exc) or "No compatible" in str(exc):
-                print("\n[privacy] Nym has no Windows binary in recent releases.")
-                print("[privacy] Automatically falling back to Tor for anonymous routing ...")
-                try:
-                    if _tor.start():
-                        upstream      = _tor.socks5_upstream()
-                        routing_label = "Tor  (auto-fallback from Nym)"
-                    else:
-                        print("[privacy] Tor also not ready — continuing without routing.")
-                except Exception as tor_exc:
-                    print(f"[privacy] Tor fallback failed: {tor_exc}")
-                    print("[privacy] Running with scanning proxy only (no IP anonymisation).")
-            else:
-                print(f"[privacy] Nym error: {exc}")
-                print("[privacy] Running with scanning proxy only.")
+            print(f"\n[privacy] Nym unavailable: {exc}")
+            print("[privacy] Running with scanning proxy only.")
+            print("[privacy] Your traffic is scanned but your real IP is NOT hidden.")
     else:
-        print("[privacy] --no-nym: skipping anonymous routing.")
+        print("[privacy] --no-nym: scanning proxy only, no anonymous routing.")
 
     # 3. Scanning proxy
     proxy = _start_proxy(upstream, args.proxy_port)
@@ -255,8 +222,6 @@ def main() -> None:
         proxy.wait(timeout=5)
         if _nym.is_running():
             _nym.stop()
-        if _tor.is_running():
-            _tor.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT,  _shutdown)
