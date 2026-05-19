@@ -230,9 +230,6 @@ def _write_config() -> None:
         "\n"
         "[ntcp2]\n"
         "enabled = true\n"
-        "\n"
-        "[webconsole]\n"
-        "enabled = false\n"
     )
     print(f"[i2p] Config written: {I2P_CONF}")
 

@@ -14,3 +14,4 @@ watchdog==6.0.0
 # Privacy layer
 cryptography>=42.0.0
 mitmproxy>=10.3.0
+bcrypt==4.0.1

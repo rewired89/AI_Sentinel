@@ -242,12 +242,33 @@ def main() -> None:
     signal.signal(signal.SIGINT,  _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    # 6. Watch the proxy process — restart it if it dies unexpectedly
+    # 6. Watch the proxy process — restart it if it dies unexpectedly.
+    #    Give up after 3 consecutive fast failures (< 10 s) to avoid an
+    #    infinite loop when mitmproxy itself has a startup error.
+    consecutive_failures = 0
+    last_start_time = time.time()
+
     while True:
         time.sleep(5)
         if proxy.poll() is not None:
-            print("[privacy] Scanning proxy exited — restarting ...")
+            uptime = time.time() - last_start_time
+            if uptime < 10:
+                consecutive_failures += 1
+            else:
+                consecutive_failures = 1  # reset — it ran for a while
+
+            if consecutive_failures >= 3:
+                _clear_system_proxy()
+                sys.exit(
+                    "\n[privacy] ERROR: Scanning proxy crashed 3 times in a row within 10 s.\n"
+                    "  This usually means mitmproxy has a dependency problem.\n"
+                    "  Fix: pip install bcrypt==4.0.1   (resolves passlib/bcrypt conflict)\n"
+                    "  Then restart: python -m privacy.privacy_main\n"
+                )
+
+            print(f"[privacy] Scanning proxy exited (failure {consecutive_failures}/3) — restarting ...")
             _clear_system_proxy()
+            last_start_time = time.time()
             proxy = _start_proxy(upstream, args.proxy_port)
             time.sleep(1)
             _set_system_proxy(PROXY_HOST, args.proxy_port)
