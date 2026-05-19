@@ -17,3 +17,6 @@ data/i2p/
 # Runtime alert and threat logs (user-specific, generated at runtime)
 data/alerts_human.json
 data/privacy_threats.json
+assets/
+dist/
+build/work/

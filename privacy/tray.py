@@ -83,6 +83,23 @@ def _label() -> str:
 # ---------------------------------------------------------------------------
 
 def _make_icon(state: TrayState):
+    # When running as a PyInstaller .exe, load the bundled .ico
+    try:
+        import sys as _sys
+        if getattr(_sys, 'frozen', False):
+            ico = Path(_sys._MEIPASS) / "assets" / "sentinel.ico"
+            if ico.exists():
+                from PIL import Image
+                img = Image.open(ico).resize((64, 64)).convert("RGBA")
+                # Tint it based on state
+                if state == TrayState.THREAT:
+                    from PIL import ImageEnhance
+                    img = ImageEnhance.Color(img).enhance(0)  # greyscale
+                    img = img.convert("RGBA")
+                return img
+    except Exception:
+        pass
+
     from PIL import Image, ImageDraw
     colour = {
         TrayState.STARTING: "#888888",
@@ -95,12 +112,10 @@ def _make_icon(state: TrayState):
     size = 64
     img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Shield shape
     draw.polygon([(32,4),(58,16),(58,38),(32,60),(6,38),(6,16)], fill=colour)
-    # White centre rectangle as logo mark
     draw.rectangle([24, 18, 40, 46], fill="white")
-    draw.rectangle([26, 20, 38, 44], fill=colour)   # cut-out to make an "S"-ish mark
-    draw.rectangle([26, 28, 38, 36], fill="white")  # middle bar
+    draw.rectangle([26, 20, 38, 44], fill=colour)
+    draw.rectangle([26, 28, 38, 36], fill="white")
     return img
 
 
