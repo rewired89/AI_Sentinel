@@ -28,11 +28,27 @@ import shutil
 import argparse
 import subprocess
 import threading
+import traceback
 import urllib.parse as _urlparse
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
+
+_STARTUP_LOG = ROOT / "data" / "sentinel_startup.log"
+
+
+def _log(msg: str) -> None:
+    """Write to startup log and stdout. Safe to call before anything is initialised."""
+    _STARTUP_LOG.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+    line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+    try:
+        with open(_STARTUP_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+    print(line)
 
 from dotenv import load_dotenv
 from privacy import identity as _identity
@@ -387,4 +403,25 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        _log("AI Sentinel starting up.")
+        main()
+    except SystemExit:
+        raise   # clean exits (Ctrl-C, --setup, etc.) pass through normally
+    except Exception:
+        tb = traceback.format_exc()
+        _log("CRASH — unhandled exception:\n" + tb)
+        # On Windows, show a message box so the user knows something went wrong
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                f"AI Sentinel crashed on startup.\n\n"
+                f"Error log: {_STARTUP_LOG}\n\n"
+                f"{tb[-800:]}",
+                "AI Sentinel — Startup Error",
+                0x10,   # MB_ICONERROR
+            )
+        except Exception:
+            pass
+        sys.exit(1)
