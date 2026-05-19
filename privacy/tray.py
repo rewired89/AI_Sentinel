@@ -184,6 +184,7 @@ def start(stop_callback) -> None:
                 pystray.MenuItem(
                     "Open threat log",
                     lambda icon, item: _open_log(),
+                    default = True,   # left-click triggers this
                 ),
                 pystray.MenuItem(
                     "Stop AI Sentinel",
