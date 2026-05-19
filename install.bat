@@ -1,10 +1,11 @@
 @echo off
-title AI Sentinel — Setup
+chcp 65001 > nul
+title AI Sentinel Setup
 color 0A
 
 echo.
 echo  ============================================================
-echo   AI SENTINEL — First Time Setup
+echo   AI SENTINEL - First Time Setup
 echo  ============================================================
 echo.
 echo  This will:
@@ -29,9 +30,10 @@ if errorlevel 1 (
 cd /d "%~dp0"
 
 :: Install Python dependencies
-echo  Installing Python dependencies...
+echo  Installing Python dependencies (this may take 2-5 minutes)...
+echo  You will see packages being downloaded — that is normal.
 echo.
-python -m pip install -r requirements.txt --quiet
+python -m pip install -r requirements.txt
 if errorlevel 1 (
     echo  ERROR: pip install failed. Check your internet connection.
     pause
