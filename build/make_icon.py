@@ -11,7 +11,7 @@ OUT = Path(__file__).parent.parent / "assets" / "sentinel.ico"
 OUT.parent.mkdir(exist_ok=True)
 
 
-def _draw_shield(size: int, bg_colour: str = "#1e3a5f") -> Image.Image:
+def _draw_shield(size: int, bg_colour: str = "#0f172a") -> Image.Image:
     img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     m    = size / 64          # scale factor
@@ -27,7 +27,7 @@ def _draw_shield(size: int, bg_colour: str = "#1e3a5f") -> Image.Image:
     ]
     draw.polygon(pts, fill=bg_colour)
 
-    # Inner highlight (lighter shade) for depth
+    # Inner shield — bright blue fill
     inner_pts = [
         (32*m, 9*m),
         (54*m, 18*m),
@@ -36,7 +36,7 @@ def _draw_shield(size: int, bg_colour: str = "#1e3a5f") -> Image.Image:
         (10*m, 36*m),
         (10*m, 18*m),
     ]
-    draw.polygon(inner_pts, fill="#2563eb")
+    draw.polygon(inner_pts, fill="#3b82f6")
 
     # White "S" shape using rectangles — works at all sizes, no font needed
     lx, rx = int(21*m), int(43*m)   # left / right x

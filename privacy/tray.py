@@ -69,12 +69,13 @@ _SUMMARY = (
 def _label() -> str:
     with _state_lock:
         s = _state
+    # Keep tooltip short — Windows truncates long tray tooltips
     return {
-        TrayState.STARTING: "AI Sentinel - Starting...",
-        TrayState.ACTIVE:   "AI Sentinel - ACTIVE (I2P + Scanning)\n" + _SUMMARY,
-        TrayState.SCANNING: "AI Sentinel - Scanning Only\n" + _SUMMARY,
-        TrayState.THREAT:   "AI Sentinel - THREAT DETECTED",
-        TrayState.STOPPED:  "AI Sentinel - Stopped",
+        TrayState.STARTING: "AI Sentinel\nStarting...",
+        TrayState.ACTIVE:   "AI Sentinel\nACTIVE — I2P + Scanning\nProtecting against 8 threat types",
+        TrayState.SCANNING: "AI Sentinel\nScanning Only (no routing)\nProtecting against 8 threat types",
+        TrayState.THREAT:   "AI Sentinel\n⚠ THREAT DETECTED\nCheck notification for details",
+        TrayState.STOPPED:  "AI Sentinel\nStopped",
     }.get(s, "AI Sentinel")
 
 
