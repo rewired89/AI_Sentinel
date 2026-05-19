@@ -19,3 +19,6 @@ bcrypt==4.0.1
 # Tray icon
 pystray>=0.19.0
 Pillow>=10.0.0
+
+# Modern Windows notifications
+winotify>=1.1.0

@@ -77,23 +77,23 @@ _THREAT_TYPES = [
 ]
 
 def _show_startup_notification(routing: str | None) -> None:
-    """Show a Windows toast telling the user AI Sentinel is active."""
+    """Show a modern Windows 10/11 toast notification."""
     route = routing if routing else "Scanning only"
     body  = f"{route} · {len(_THREAT_TYPES)} threat types monitored"
     try:
-        from plyer import notification as _notif
-        _notif.notify(
-            title="AI Sentinel — Active",
-            message=body,
-            app_name="AI Sentinel",
-            timeout=5,
+        from winotify import Notification
+        n = Notification(
+            app_id  = "AI Sentinel",
+            title   = "AI Sentinel — Active",
+            msg     = body,
+            duration= "short",
         )
+        n.show()
     except Exception:
         try:
-            from win10toast import ToastNotifier
-            ToastNotifier().show_toast(
-                "AI Sentinel — Active", body, duration=5, threaded=True,
-            )
+            from plyer import notification as _notif
+            _notif.notify(title="AI Sentinel — Active", message=body,
+                          app_name="AI Sentinel", timeout=5)
         except Exception:
             pass
 

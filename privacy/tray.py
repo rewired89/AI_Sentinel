@@ -84,39 +84,36 @@ def _label() -> str:
 # ---------------------------------------------------------------------------
 
 def _make_icon(state: TrayState):
-    # When running as a PyInstaller .exe, load the bundled .ico
-    try:
-        import sys as _sys
-        if getattr(_sys, 'frozen', False):
-            ico = Path(_sys._MEIPASS) / "assets" / "sentinel.ico"
-            if ico.exists():
-                from PIL import Image
-                img = Image.open(ico).resize((64, 64)).convert("RGBA")
-                # Tint it based on state
-                if state == TrayState.THREAT:
-                    from PIL import ImageEnhance
-                    img = ImageEnhance.Color(img).enhance(0)  # greyscale
-                    img = img.convert("RGBA")
-                return img
-    except Exception:
-        pass
-
     from PIL import Image, ImageDraw
-    colour = {
-        TrayState.STARTING: "#888888",
-        TrayState.ACTIVE:   "#22c55e",
-        TrayState.SCANNING: "#eab308",
-        TrayState.THREAT:   "#ef4444",
-        TrayState.STOPPED:  "#6b7280",
-    }.get(state, "#888888")
+
+    _COLOURS = {
+        TrayState.STARTING: "#6b7280",
+        TrayState.ACTIVE:   "#22c55e",   # green
+        TrayState.SCANNING: "#f59e0b",   # amber — bolder than yellow
+        TrayState.THREAT:   "#ef4444",   # red
+        TrayState.STOPPED:  "#6b7280",   # grey
+    }
+    colour = _COLOURS.get(state, "#6b7280")
 
     size = 64
     img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.polygon([(32,4),(58,16),(58,38),(32,60),(6,38),(6,16)], fill=colour)
-    draw.rectangle([24, 18, 40, 46], fill="white")
-    draw.rectangle([26, 20, 38, 44], fill=colour)
-    draw.rectangle([26, 28, 38, 36], fill="white")
+
+    # Dark pill background — makes icon pop on both light and dark taskbars
+    draw.rounded_rectangle([2, 2, 62, 62], radius=12, fill="#0f172a")
+
+    # Shield body — fills most of the dark background
+    shield = [(32,6), (56,15), (56,38), (32,58), (8,38), (8,15)]
+    draw.polygon(shield, fill=colour)
+
+    # White "S" lettermark (bold rectangles, readable at 16 px)
+    lx, rx = 21, 43
+    draw.rectangle([lx, 14, rx, 22], fill="white")       # top bar
+    draw.rectangle([lx, 14, lx+8, 34], fill="white")     # top-left stroke
+    draw.rectangle([lx, 30, rx, 38], fill="white")       # mid bar
+    draw.rectangle([rx-8, 34, rx, 52], fill="white")     # bottom-right stroke
+    draw.rectangle([lx, 44, rx, 52], fill="white")       # bottom bar
+
     return img
 
 
