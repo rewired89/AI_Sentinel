@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 from privacy import identity as _identity
 from privacy.routing import nym_client as _nym
+from privacy.routing import tor_client as _tor
 
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT  = 8877
@@ -157,7 +158,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="AI Sentinel Privacy Layer")
     parser.add_argument("--no-nym",      action="store_true",
-                        help="Skip Nym routing (threat scanning only, no IP anonymisation)")
+                        help="Skip Nym routing")
+    parser.add_argument("--tor",         action="store_true",
+                        help="Use Tor instead of Nym for anonymous routing")
+    parser.add_argument("--no-routing",  action="store_true",
+                        help="Disable all anonymous routing (scanning proxy only)")
     parser.add_argument("--proxy-port",  type=int, default=PROXY_PORT,
                         help=f"Local scanning proxy port (default: {PROXY_PORT})")
     parser.add_argument("--setup-certs", action="store_true",
@@ -177,17 +182,50 @@ def main() -> None:
     print(f"\n  Your Sentinel Address (public key — this is your only ID):")
     print(f"  {ident['address']}\n")
 
-    # 2. Nym routing
+    # 2. Anonymous routing
     upstream: str | None = None
-    if not args.no_nym:
+    routing_label = "DISABLED"
+
+    if args.no_routing:
+        print("[privacy] --no-routing: scanning proxy only, no IP anonymisation.")
+
+    elif args.tor:
+        print("[privacy] Starting Tor routing ...")
+        try:
+            if _tor.start():
+                upstream      = _tor.socks5_upstream()
+                routing_label = "Tor  (onion routing)"
+            else:
+                print("[privacy] Tor started but port not ready — continuing without routing.")
+        except Exception as exc:
+            print(f"[privacy] Tor failed to start: {exc}")
+            print("[privacy] Continuing with scanning proxy only.")
+
+    elif not args.no_nym:
         print("[privacy] Starting Nym mixnet client ...")
-        nym_ok = _nym.start()
-        if nym_ok:
-            upstream = _nym.socks5_upstream()
-        else:
-            print("[privacy] Nym not ready yet — running scanning proxy without anonymous routing.")
-            print("[privacy] Your traffic is scanned but your real IP is NOT hidden.")
-            print("[privacy] Nym often connects within 60 s — restart to retry.")
+        try:
+            if _nym.start():
+                upstream      = _nym.socks5_upstream()
+                routing_label = "Nym mixnet  (timing-attack resistant)"
+            else:
+                print("[privacy] Nym started but port not ready — continuing without routing.")
+        except RuntimeError as exc:
+            # Nym has no Windows binary in recent releases — fall back to Tor automatically.
+            if "No compatible Windows binary" in str(exc) or "No compatible" in str(exc):
+                print("\n[privacy] Nym has no Windows binary in recent releases.")
+                print("[privacy] Automatically falling back to Tor for anonymous routing ...")
+                try:
+                    if _tor.start():
+                        upstream      = _tor.socks5_upstream()
+                        routing_label = "Tor  (auto-fallback from Nym)"
+                    else:
+                        print("[privacy] Tor also not ready — continuing without routing.")
+                except Exception as tor_exc:
+                    print(f"[privacy] Tor fallback failed: {tor_exc}")
+                    print("[privacy] Running with scanning proxy only (no IP anonymisation).")
+            else:
+                print(f"[privacy] Nym error: {exc}")
+                print("[privacy] Running with scanning proxy only.")
     else:
         print("[privacy] --no-nym: skipping anonymous routing.")
 
@@ -201,7 +239,7 @@ def main() -> None:
     print(f"""
 [privacy] ACTIVE
   Scanning proxy  : {PROXY_HOST}:{args.proxy_port}
-  Anonymous route : {"Nym mixnet  ← traffic analysis resistant" if upstream else "DISABLED (--no-nym or Nym not ready)"}
+  Anonymous route : {routing_label if upstream else "DISABLED — traffic is scanned but real IP is visible"}
   Threat layers   : VT domain lookup + OTX pulses + C2 heuristics + Deanon scanner
   Identity        : {ident['address'][:32]}...
   Threat log      : data/privacy_threats.json
@@ -215,8 +253,10 @@ def main() -> None:
         _clear_system_proxy()
         proxy.terminate()
         proxy.wait(timeout=5)
-        if not args.no_nym:
+        if _nym.is_running():
             _nym.stop()
+        if _tor.is_running():
+            _tor.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT,  _shutdown)

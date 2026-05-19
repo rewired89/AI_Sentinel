@@ -8,9 +8,10 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Generated identity and Nym data (never commit private keys or binaries)
+# Generated identity and routing data (never commit private keys or binaries)
 data/identity/
 data/nym/
+data/tor/
 
 # Runtime alert and threat logs (user-specific, generated at runtime)
 data/alerts_human.json
