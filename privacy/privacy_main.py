@@ -182,32 +182,41 @@ def main() -> None:
     upstream: str | None = None
     routing_label = "DISABLED"
 
-    if args.route == "none":
-        print("[privacy] --route=none: scanning proxy only, no anonymous routing.")
+    try:
+        if args.route == "none":
+            print("[privacy] --route=none: scanning proxy only, no anonymous routing.")
 
-    elif args.route == "i2p":
-        print("[privacy] Starting I2P routing (i2pd) ...")
-        try:
-            if _i2p.start():
-                upstream      = _i2p.socks5_upstream()
-                routing_label = "I2P  (garlic routing)"
-            else:
-                print("[privacy] i2pd port did not open — running without routing.")
-        except Exception as exc:
-            print(f"[privacy] I2P failed: {exc}")
-            print("[privacy] Running with scanning proxy only.")
+        elif args.route == "i2p":
+            print("[privacy] Starting I2P routing (i2pd) ...")
+            try:
+                if _i2p.start():
+                    upstream      = _i2p.socks5_upstream()
+                    routing_label = "I2P  (garlic routing)"
+                else:
+                    print("[privacy] i2pd port did not open — running without routing.")
+            except Exception as exc:
+                print(f"[privacy] I2P failed: {exc}")
+                print("[privacy] Running with scanning proxy only.")
 
-    elif args.route == "nym":
-        print("[privacy] Starting Nym mixnet client ...")
-        try:
-            if _nym.start():
-                upstream      = _nym.socks5_upstream()
-                routing_label = "Nym mixnet"
-            else:
-                print("[privacy] Nym port did not open — running without routing.")
-        except RuntimeError as exc:
-            print(f"\n[privacy] Nym unavailable: {exc}")
-            print("[privacy] Run with --route=i2p or --route=none.")
+        elif args.route == "nym":
+            print("[privacy] Starting Nym mixnet client ...")
+            try:
+                if _nym.start():
+                    upstream      = _nym.socks5_upstream()
+                    routing_label = "Nym mixnet"
+                else:
+                    print("[privacy] Nym port did not open — running without routing.")
+            except RuntimeError as exc:
+                print(f"\n[privacy] Nym unavailable: {exc}")
+                print("[privacy] Run with --route=i2p or --route=none.")
+
+    except KeyboardInterrupt:
+        print("\n[privacy] Interrupted during startup — cleaning up ...")
+        if _nym.is_running():
+            _nym.stop()
+        if _i2p.is_running():
+            _i2p.stop()
+        sys.exit(0)
 
     # 3. Scanning proxy
     proxy = _start_proxy(upstream, args.proxy_port)

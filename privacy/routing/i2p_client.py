@@ -64,6 +64,19 @@ _NATIVE_FORMATS = {
 _i2p_proc: subprocess.Popen | None = None
 
 
+def _tail_log(path: Path, lines: int = 20) -> None:
+    """Print the last N lines of a log file to help diagnose startup failures."""
+    try:
+        text = path.read_text(errors="replace")
+        tail = text.strip().splitlines()[-lines:]
+        if tail:
+            print(f"\n[i2p] Last {len(tail)} lines of {path.name}:")
+            for line in tail:
+                print(f"  {line}")
+    except (FileNotFoundError, OSError):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Download helpers
 # ---------------------------------------------------------------------------
@@ -283,19 +296,25 @@ def start() -> bool:
 
     # Poll for SOCKS5 port — up to 60 s (port opens before tunnels are ready)
     print("[i2p] Waiting for SOCKS5 port ", end="", flush=True)
-    for _ in range(120):
-        try:
-            with socket.create_connection(("127.0.0.1", I2P_SOCKS5_PORT), timeout=1):
-                pass
-            print(" ready.")
-            print(f"[i2p] SOCKS5 proxy on 127.0.0.1:{I2P_SOCKS5_PORT}")
-            print("[i2p] Note: tunnels may take another 2–5 min to fully build on first run.")
-            return True
-        except (ConnectionRefusedError, OSError):
-            print(".", end="", flush=True)
-            time.sleep(0.5)
+    try:
+        for _ in range(120):
+            try:
+                with socket.create_connection(("127.0.0.1", I2P_SOCKS5_PORT), timeout=1):
+                    pass
+                print(" ready.")
+                print(f"[i2p] SOCKS5 proxy on 127.0.0.1:{I2P_SOCKS5_PORT}")
+                print("[i2p] Note: tunnels may take another 2–5 min to fully build on first run.")
+                return True
+            except (ConnectionRefusedError, OSError):
+                print(".", end="", flush=True)
+                time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\n[i2p] Interrupted — stopping i2pd ...")
+        stop()
+        raise
 
     print()
+    _tail_log(log_path)
     print("[i2p] SOCKS5 port did not open within 60 s — check data/i2p/i2pd.log")
     return False
 
