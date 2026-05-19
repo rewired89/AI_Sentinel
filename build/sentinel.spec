@@ -69,7 +69,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'unittest', 'email', 'xml', 'pydoc'],
+    excludes=['tkinter', 'unittest', 'pydoc'],
     cipher=block_cipher,
     noarchive=False,
 )
