@@ -334,4 +334,4 @@ def is_running() -> bool:
 
 
 def socks5_upstream() -> str:
-    return f"socks5h://127.0.0.1:{I2P_SOCKS5_PORT}"
+    return f"socks5://127.0.0.1:{I2P_SOCKS5_PORT}"

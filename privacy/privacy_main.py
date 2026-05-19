@@ -145,7 +145,7 @@ def _start_proxy(upstream: str | None, port: int) -> subprocess.Popen:
         cmd += ["--mode", f"upstream:{upstream}"]
 
     print(f"[privacy] Scanning proxy on {PROXY_HOST}:{port}"
-          + (f" → Nym {upstream}" if upstream else " (direct, no Nym)"))
+          + (f" → {upstream}" if upstream else " (direct, no anonymous routing)"))
     return subprocess.Popen(cmd, cwd=str(ROOT))
 
 

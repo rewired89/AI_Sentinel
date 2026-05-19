@@ -355,4 +355,4 @@ def is_running() -> bool:
 
 def socks5_upstream() -> str:
     """Return the upstream address string for mitmproxy's --mode flag."""
-    return f"socks5h://127.0.0.1:{NYM_SOCKS5_PORT}"
+    return f"socks5://127.0.0.1:{NYM_SOCKS5_PORT}"
