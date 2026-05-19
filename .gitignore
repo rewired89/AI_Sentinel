@@ -12,6 +12,7 @@ __pycache__/
 data/identity/
 data/nym/
 data/tor/
+data/i2p/
 
 # Runtime alert and threat logs (user-specific, generated at runtime)
 data/alerts_human.json

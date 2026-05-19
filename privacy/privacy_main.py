@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 from privacy import identity as _identity
 from privacy.routing import nym_client as _nym
+from privacy.routing import i2p_client as _i2p
 
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT  = 8877
@@ -156,8 +157,8 @@ def main() -> None:
     load_dotenv(ROOT / "app" / ".env")
 
     parser = argparse.ArgumentParser(description="AI Sentinel Privacy Layer")
-    parser.add_argument("--no-nym",      action="store_true",
-                        help="Skip anonymous routing (scanning proxy only)")
+    parser.add_argument("--route", choices=["nym", "i2p", "none"], default="i2p",
+                        help="Anonymous routing backend (default: i2p)")
     parser.add_argument("--proxy-port",  type=int, default=PROXY_PORT,
                         help=f"Local scanning proxy port (default: {PROXY_PORT})")
     parser.add_argument("--setup-certs", action="store_true",
@@ -181,20 +182,32 @@ def main() -> None:
     upstream: str | None = None
     routing_label = "DISABLED"
 
-    if not args.no_nym:
+    if args.route == "none":
+        print("[privacy] --route=none: scanning proxy only, no anonymous routing.")
+
+    elif args.route == "i2p":
+        print("[privacy] Starting I2P routing (i2pd) ...")
+        try:
+            if _i2p.start():
+                upstream      = _i2p.socks5_upstream()
+                routing_label = "I2P  (garlic routing)"
+            else:
+                print("[privacy] i2pd port did not open — running without routing.")
+        except Exception as exc:
+            print(f"[privacy] I2P failed: {exc}")
+            print("[privacy] Running with scanning proxy only.")
+
+    elif args.route == "nym":
         print("[privacy] Starting Nym mixnet client ...")
         try:
             if _nym.start():
                 upstream      = _nym.socks5_upstream()
                 routing_label = "Nym mixnet"
             else:
-                print("[privacy] Nym port did not open — scanning proxy will run without routing.")
+                print("[privacy] Nym port did not open — running without routing.")
         except RuntimeError as exc:
             print(f"\n[privacy] Nym unavailable: {exc}")
-            print("[privacy] Running with scanning proxy only.")
-            print("[privacy] Your traffic is scanned but your real IP is NOT hidden.")
-    else:
-        print("[privacy] --no-nym: scanning proxy only, no anonymous routing.")
+            print("[privacy] Run with --route=i2p or --route=none.")
 
     # 3. Scanning proxy
     proxy = _start_proxy(upstream, args.proxy_port)
@@ -222,6 +235,8 @@ def main() -> None:
         proxy.wait(timeout=5)
         if _nym.is_running():
             _nym.stop()
+        if _i2p.is_running():
+            _i2p.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT,  _shutdown)
