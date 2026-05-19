@@ -18,16 +18,14 @@ Trade-off you must accept:
     This is not a VPN. It is not meant to feel like one.
   • The Nym network is smaller than Tor. Maturity gap exists.
 """
-import os
-import sys
-import time
 import json
-import socket
 import platform
-import zipfile
-import tarfile
+import socket
 import subprocess
+import tarfile
+import time
 import urllib.request
+import zipfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -38,16 +36,15 @@ NYM_DIR    = Path(__file__).parent.parent.parent / "data" / "nym"
 _SYSTEM    = platform.system()
 NYM_BIN    = NYM_DIR / ("nym-socks5-client.exe" if _SYSTEM == "Windows" else "nym-socks5-client")
 
-# Platform-specific asset name hints, tried in order from strictest to loosest.
-# Nym has changed their release naming across versions (used to include the
-# target triple like "x86_64-pc-windows-msvc", now sometimes just "nym-socks5-client").
-# We try each tier and accept the first match.
+# Asset name tiers — tried from most specific to least specific.
+# Outer loop is tier, inner loop is release, so a platform-tagged asset in ANY
+# release beats a bare asset in the latest release.
 _ASSET_TIERS = {
     "Windows": [
-        ("nym-socks5-client", "windows"),   # e.g. nym-socks5-client-windows.zip
-        ("nym-socks5-client", "msvc"),       # e.g. ...-x86_64-pc-windows-msvc.zip
-        ("nym-socks5-client", "win"),        # any "win" variant
-        ("nym-socks5-client",),              # bare name — last resort
+        ("nym-socks5-client", "windows"),
+        ("nym-socks5-client", "msvc"),
+        ("nym-socks5-client", "win"),
+        ("nym-socks5-client",),           # bare name — last resort
     ],
     "Linux": [
         ("nym-socks5-client", "linux"),
@@ -63,16 +60,17 @@ _ASSET_TIERS = {
     ],
 }
 
-GITHUB_RELEASES_API = "https://api.github.com/repos/nymtech/nym/releases?per_page=10"
-
-# Formats that are native to this OS — if we download something else, reject it.
+# Magic-byte format strings that are native to each OS.
+# A downloaded binary whose format is NOT in this set is silently skipped.
 _NATIVE_FORMATS = {
-    "Windows": {"exe", "zip"},        # PE exe or a zip containing one
+    "Windows": {"exe", "zip"},
     "Linux":   {"elf", "gz", "xz", "bz2"},
     "Darwin":  {"macho", "gz", "xz", "bz2"},
 }
 
-NYM_CONFIG_ID  = "sentinel-client"
+GITHUB_RELEASES_API = "https://api.github.com/repos/nymtech/nym/releases?per_page=10"
+
+NYM_CONFIG_ID   = "sentinel-client"
 NYM_SOCKS5_PORT = 1080
 
 _nym_proc: subprocess.Popen | None = None
@@ -86,15 +84,15 @@ def is_downloaded() -> bool:
     return NYM_BIN.exists()
 
 
-def _resolve_download_url() -> tuple[str, str]:
+def _fetch_candidates() -> list[tuple[str, str]]:
     """
-    Search the last 10 Nym releases for a socks5-client asset that matches
-    this platform. Returns (download_url, release_tag).
+    Return an ordered list of (download_url, release_tag) from the last 10
+    Nym releases.
 
-    Newer Nym releases sometimes only ship Linux binaries; this walks back
-    through releases until it finds one with a Windows-compatible asset.
-    Tiers go from strictest name match to loosest so a bare 'nym-socks5-client'
-    is only accepted when no platform-tagged variant exists.
+    Ordering: tier 0 (most platform-specific name) across ALL releases comes
+    before tier 1 across all releases, and so on. This guarantees a
+    platform-tagged asset in an older release beats a bare/wrong-OS asset in
+    the latest release.
     """
     tiers = _ASSET_TIERS.get(_SYSTEM)
     if not tiers:
@@ -105,72 +103,50 @@ def _resolve_download_url() -> tuple[str, str]:
     with urllib.request.urlopen(req, timeout=15) as resp:
         releases = json.loads(resp.read())
 
-    skipped: list[str] = []
+    candidates: list[tuple[str, str]] = []
 
-    for release in releases:
-        tag    = release.get("tag_name", "unknown")
-        assets = release.get("assets", [])
-        by_name = {a.get("name", "").lower(): a for a in assets}
-
-        for tier in tiers:
+    for tier in tiers:
+        for release in releases:
+            tag     = release.get("tag_name", "unknown")
+            by_name = {a.get("name", "").lower(): a for a in release.get("assets", [])}
             for name_lower, asset in by_name.items():
                 if all(frag.lower() in name_lower for frag in tier):
-                    # Reject bare 'nym-socks5-client' assets from releases that
-                    # also contain platform-specific assets — the bare one is
-                    # likely the Linux build named without a suffix.
-                    if tier == ("nym-socks5-client",):
-                        has_platform_asset = any(
-                            "windows" in n or "linux" in n or "darwin" in n
-                            or "msvc" in n or "musl" in n or "apple" in n
-                            for n in by_name
-                            if "socks5" in n
-                        )
-                        if has_platform_asset:
-                            continue  # skip bare asset — platform ones exist
+                    entry = (asset["browser_download_url"], tag)
+                    if entry not in candidates:
+                        candidates.append(entry)
 
-                    url = asset["browser_download_url"]
-                    print(f"[nym] Found: {asset['name']}  (release {tag})")
-                    return url, tag
+    if not candidates:
+        all_socks5 = [
+            f"{r.get('tag_name')}: "
+            f"{[a['name'] for a in r.get('assets', []) if 'socks5' in a['name'].lower()]}"
+            for r in releases
+        ]
+        raise RuntimeError(
+            f"No socks5-client asset found in last {len(releases)} Nym releases.\n"
+            f"  {all_socks5}\n"
+            f"  Visit https://github.com/nymtech/nym/releases"
+        )
 
-        socks5_in_release = [n for n in by_name if "socks5" in n]
-        skipped.append(f"{tag}: {socks5_in_release}")
-
-    raise RuntimeError(
-        f"No {_SYSTEM}-compatible socks5-client found in the last {len(releases)} Nym releases.\n"
-        f"  Releases checked: {[r.get('tag_name') for r in releases]}\n"
-        f"  Socks5 assets per release: {skipped}\n"
-        f"  Visit https://github.com/nymtech/nym/releases"
-    )
+    return candidates
 
 
 def _detect_format(path: Path) -> str:
-    """
-    Identify file format by magic bytes — completely independent of filename or
-    Content-Type, so Nym's extensionless assets are handled correctly.
-    """
+    """Identify file format by magic bytes — independent of filename."""
     with open(path, "rb") as f:
         magic = f.read(8)
-
-    if magic[:2]  == b"PK":               return "zip"
-    if magic[:2]  == b"\x1f\x8b":         return "gz"
-    if magic[:3]  == b"BZh":              return "bz2"
-    if magic[:6]  == b"\xfd7zXZ\x00":     return "xz"
-    if magic[:2]  == b"MZ":               return "exe"   # Windows PE
-    if magic[:4]  == b"\x7fELF":          return "elf"   # Linux ELF
-    if magic[:4]  == b"\xcf\xfa\xed\xfe": return "macho" # macOS Mach-O
+    if magic[:2]  == b"PK":                return "zip"
+    if magic[:2]  == b"\x1f\x8b":          return "gz"
+    if magic[:3]  == b"BZh":               return "bz2"
+    if magic[:6]  == b"\xfd7zXZ\x00":      return "xz"
+    if magic[:2]  == b"MZ":                return "exe"    # Windows PE
+    if magic[:4]  == b"\x7fELF":           return "elf"    # Linux ELF
+    if magic[:4]  == b"\xcf\xfa\xed\xfe":  return "macho"  # macOS Mach-O
     return "unknown"
 
 
 def _download_file(url: str, dest: Path) -> None:
-    """
-    Download url → dest using requests with the headers GitHub needs to serve
-    raw binary assets (including extensionless ones).
-    Falls back to urllib if requests isn't available.
-    """
-    headers = {
-        "User-Agent": "AI-Sentinel/1.0",
-        "Accept":     "application/octet-stream",
-    }
+    """Download url → dest with headers GitHub requires for raw binary assets."""
+    headers = {"User-Agent": "AI-Sentinel/1.0", "Accept": "application/octet-stream"}
     try:
         import requests as _req
         with _req.get(url, headers=headers, stream=True, timeout=60) as r:
@@ -186,46 +162,14 @@ def _download_file(url: str, dest: Path) -> None:
                         print(f"\r[nym] Download: {pct}%", end="", flush=True)
         print()
     except ImportError:
-        # requests not installed — fall back to urllib (less reliable for GitHub)
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as f:
             f.write(resp.read())
 
 
-def download() -> None:
-    """Download and install the Nym SOCKS5 client binary."""
-    NYM_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Remove any leftover partial downloads
-    for stale in NYM_DIR.glob("nym_dl.*"):
-        stale.unlink(missing_ok=True)
-    (NYM_DIR / "nym_dl.bin").unlink(missing_ok=True)
-
-    url, tag = _resolve_download_url()
-    archive  = NYM_DIR / "nym_dl.bin"
-
-    print(f"[nym] Downloading from release {tag} ...")
-    _download_file(url, archive)
-
-    fmt   = _detect_format(archive)
-    magic = archive.read_bytes()[:8]
-    print(f"[nym] Detected format: {fmt}  (magic: {magic.hex()})")
-
-    # Sanity-check: reject a binary built for the wrong OS before trying to run it.
-    native = _NATIVE_FORMATS.get(_SYSTEM, set())
-    if native and fmt not in native:
-        preview = archive.read_bytes()[:80]
-        archive.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"[nym] Downloaded binary is not compatible with {_SYSTEM}.\n"
-            f"  Format detected : {fmt}  (magic: {magic.hex()})\n"
-            f"  Expected one of : {native}\n"
-            f"  This release ({tag}) may not ship a {_SYSTEM} build.\n"
-            f"  Preview: {preview!r}"
-        )
-
+def _install(archive: Path, fmt: str, url: str) -> None:
+    """Move or unpack archive into NYM_BIN."""
     if fmt in ("exe", "elf", "macho"):
-        # Bare binary — move it directly into place
         if NYM_BIN.exists():
             NYM_BIN.unlink()
         archive.rename(NYM_BIN)
@@ -241,23 +185,19 @@ def download() -> None:
         archive.unlink(missing_ok=True)
 
     else:
-        # Show first 120 bytes as text to help diagnose (e.g. HTML error page)
         preview = archive.read_bytes()[:120]
         archive.unlink(missing_ok=True)
         raise RuntimeError(
-            f"[nym] Downloaded file has unrecognised format.\n"
-            f"  URL     : {url}\n"
-            f"  Magic   : {magic.hex()}\n"
-            f"  Preview : {preview!r}\n"
-            f"  This usually means GitHub returned an error or redirect page.\n"
-            f"  Try downloading manually from https://github.com/nymtech/nym/releases"
+            f"[nym] Unrecognised file format after download.\n"
+            f"  URL    : {url}\n"
+            f"  Preview: {preview!r}"
         )
 
     if _SYSTEM != "Windows" and NYM_BIN.exists():
         NYM_BIN.chmod(0o755)
 
     if not NYM_BIN.exists():
-        # Archive may have placed the binary in a sub-folder — find and move it
+        # Archive may have placed the binary in a sub-folder — find and promote it
         found = [
             p for p in NYM_DIR.rglob("nym-socks5-client*")
             if p.suffix in ("", ".exe") and p.is_file() and p != NYM_BIN
@@ -267,12 +207,51 @@ def download() -> None:
 
     if not NYM_BIN.exists():
         raise RuntimeError(
-            f"[nym] Binary not found after download.\n"
-            f"  Expected : {NYM_BIN}\n"
-            f"  Check    : {NYM_DIR}"
+            f"[nym] Binary not found after unpack.\n"
+            f"  Expected: {NYM_BIN}"
         )
 
-    print(f"[nym] Binary ready: {NYM_BIN}")
+
+def download() -> None:
+    """
+    Download the Nym SOCKS5 client binary.
+
+    Iterates candidates (most platform-specific first, across all recent
+    releases). If a downloaded file turns out to be wrong-OS it is discarded
+    and the next candidate is tried — no crash, no manual intervention needed.
+    """
+    NYM_DIR.mkdir(parents=True, exist_ok=True)
+    archive = NYM_DIR / "nym_dl.bin"
+    archive.unlink(missing_ok=True)
+
+    candidates = _fetch_candidates()
+    native     = _NATIVE_FORMATS.get(_SYSTEM, set())
+    tried: list[str] = []
+
+    for url, tag in candidates:
+        archive.unlink(missing_ok=True)
+        print(f"[nym] Trying release {tag} ...")
+        _download_file(url, archive)
+
+        magic = archive.read_bytes()[:8]
+        fmt   = _detect_format(archive)
+        print(f"[nym] Format: {fmt}  (magic: {magic.hex()})")
+
+        if native and fmt not in native:
+            print(f"[nym] Skipping — {fmt} is not native to {_SYSTEM}.")
+            tried.append(f"{tag} ({fmt})")
+            archive.unlink(missing_ok=True)
+            continue
+
+        _install(archive, fmt, url)
+        print(f"[nym] Binary ready: {NYM_BIN}")
+        return
+
+    raise RuntimeError(
+        f"[nym] No compatible {_SYSTEM} binary found after {len(tried)} attempts.\n"
+        f"  Skipped: {tried}\n"
+        f"  Visit https://github.com/nymtech/nym/releases"
+    )
 
 
 def init_config() -> None:
@@ -334,8 +313,8 @@ def start() -> bool:
             time.sleep(0.5)
 
     print("[nym] Warning: SOCKS5 port did not open within 20 s.")
-    print("[nym] Nym may still be connecting to the mixnet — check data/nym/nym_client.log")
-    print("[nym] Continuing with proxy only (no Nym routing until it connects).")
+    print("[nym] Nym may still be connecting — check data/nym/nym_client.log")
+    print("[nym] Continuing without anonymous routing until it connects.")
     return False
 
 
@@ -358,13 +337,3 @@ def is_running() -> bool:
 def socks5_upstream() -> str:
     """Return the upstream address string for mitmproxy's --mode flag."""
     return f"socks5h://127.0.0.1:{NYM_SOCKS5_PORT}"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _progress(count: int, block: int, total: int) -> None:
-    if total > 0:
-        pct = min(100, count * block * 100 // total)
-        print(f"\r[nym] Download: {pct}%", end="", flush=True)
