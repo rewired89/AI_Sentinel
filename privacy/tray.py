@@ -149,7 +149,7 @@ def start(stop_callback) -> None:
             icon  = icon_img,
             title = _state_label(),
             menu  = pystray.Menu(
-                pystray.MenuItem(lambda text, item: _state_label(), None, enabled=False),
+                pystray.MenuItem(lambda item: _state_label(), lambda: None, enabled=False),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Open threat log", lambda: _open_log()),
                 pystray.MenuItem("Stop AI Sentinel", lambda: stop_callback()),

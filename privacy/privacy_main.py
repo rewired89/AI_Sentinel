@@ -167,10 +167,24 @@ def main() -> None:
                         help=f"Local scanning proxy port (default: {PROXY_PORT})")
     parser.add_argument("--setup-certs", action="store_true",
                         help="Install mitmproxy CA cert then exit")
+    parser.add_argument("--setup", action="store_true",
+                        help="Run first-time setup wizard (Defender exclusion + autostart)")
+    parser.add_argument("--remove-startup", action="store_true",
+                        help="Remove AI Sentinel from Windows startup and exit")
     args = parser.parse_args()
 
     if args.setup_certs:
         setup_certificates()
+        return
+
+    if args.setup:
+        from privacy.autostart import setup as _run_setup
+        _run_setup(interactive=True)
+        return
+
+    if args.remove_startup:
+        from privacy.autostart import remove_startup as _rm
+        _rm()
         return
 
     print("=" * 62)
@@ -253,6 +267,11 @@ def main() -> None:
 
     # 6. System proxy
     _set_system_proxy(PROXY_HOST, args.proxy_port)
+
+    # Hint first-time users about setup wizard
+    from privacy.autostart import is_in_startup
+    if not is_in_startup():
+        print("[privacy] Tip: run with --setup to add autostart + Defender exclusion.")
 
     # Update tray to reflect actual running state
     _tray.set_state(TrayState.ACTIVE if upstream else TrayState.SCANNING)
