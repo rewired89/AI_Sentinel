@@ -26,7 +26,23 @@ sys.path.insert(0, str(ROOT))
 
 from mitmproxy import http, ctx
 from privacy.proxy.deanon_detector import scan_response_body
+from privacy.proxy.poison_injector import inject as _poison_inject
 from privacy.alerts import notify, notify_deanon
+
+def _tray_threat(host: str = "") -> None:
+    """Flash the tray icon red, then restore after 30 s."""
+    try:
+        import privacy.tray as _tray
+        from privacy.tray import TrayState
+        _tray.set_state(TrayState.THREAT, threat_host=host)
+        def _restore():
+            import time
+            time.sleep(30)
+            _tray.set_state(TrayState.ACTIVE)
+        import threading
+        threading.Thread(target=_restore, daemon=True).start()
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # Domain/IP reputation cache  (TTL = 10 min, thread-safe)
@@ -178,6 +194,7 @@ class SentinelProxyAddon:
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
             notify("c2_beacon", extra={"url": url, "host": host})
+            _tray_threat(host)
             flow.response = http.Response.make(
                 403,
                 b"AI Sentinel: C2 beacon pattern blocked.",
@@ -224,6 +241,21 @@ class SentinelProxyAddon:
         if len(body) > 2_000_000:
             return
 
+        # Always inject fingerprint-poisoning script into HTML responses.
+        # This runs even when no deanon patterns are detected — proactive defence.
+        if "html" in ct:
+            try:
+                raw      = flow.response.raw_content or b""
+                encoding = flow.response.headers.get("content-type", "")
+                enc      = "utf-8"
+                if "charset=" in encoding:
+                    enc = encoding.split("charset=")[-1].split(";")[0].strip() or "utf-8"
+                flow.response.raw_content = _poison_inject(raw, enc)
+                # Remove Content-Length so mitmproxy recalculates it
+                flow.response.headers.pop("content-length", None)
+            except Exception as exc:
+                ctx.log.debug(f"[sentinel] Poison inject failed: {exc}")
+
         findings = scan_response_body(body, url=flow.request.pretty_url)
         if not findings:
             return
@@ -243,8 +275,9 @@ class SentinelProxyAddon:
             "ts":       datetime.now(timezone.utc).isoformat(),
         })
         notify_deanon(findings, host=host)
+        _tray_threat(host)
 
-        # Inject warning header — the browser extension reads this and shows an alert.
+        # Inject warning header — browser extension reads this and shows an alert.
         flow.response.headers["X-Sentinel-Warning"] = (
             "deanon:" + ",".join(f.category for f in findings)
         )

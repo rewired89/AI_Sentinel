@@ -38,6 +38,8 @@ from dotenv import load_dotenv
 from privacy import identity as _identity
 from privacy.routing import nym_client as _nym
 from privacy.routing import i2p_client as _i2p
+from privacy.tray import TrayState
+import privacy.tray as _tray
 
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT  = 8877
@@ -175,6 +177,14 @@ def main() -> None:
     print("  AI SENTINEL — PRIVACY LAYER")
     print("=" * 62)
 
+    # Start tray icon early so the user sees it immediately
+    def _tray_stop():
+        import signal as _sig
+        import os as _os
+        _os.kill(_os.getpid(), _sig.SIGINT)
+
+    _tray.start(_tray_stop)
+
     # 1. Cryptographic identity
     ident = _identity.load_or_create()
     print(f"\n  Your Sentinel Address (public key — this is your only ID):")
@@ -244,11 +254,14 @@ def main() -> None:
     # 6. System proxy
     _set_system_proxy(PROXY_HOST, args.proxy_port)
 
+    # Update tray to reflect actual running state
+    _tray.set_state(TrayState.ACTIVE if upstream else TrayState.SCANNING)
+
     print(f"""
 [privacy] ACTIVE
   Scanning proxy  : {PROXY_HOST}:{args.proxy_port}
   Anonymous route : {routing_label if upstream else "DISABLED — traffic is scanned but real IP is visible"}
-  Threat layers   : VT domain lookup + OTX pulses + C2 heuristics + Deanon scanner
+  Threat layers   : VT domain lookup + OTX pulses + C2 heuristics + Deanon scanner + Fingerprint Poisoning
   Identity        : {ident['address'][:32]}...
   Threat log      : data/privacy_threats.json
 
@@ -258,6 +271,7 @@ def main() -> None:
     # 7. Graceful shutdown on SIGINT / SIGTERM
     def _shutdown(sig, _frame):
         print("\n[privacy] Shutting down ...")
+        _tray.stop()
         _clear_system_proxy()
         proxy.terminate()
         proxy.wait(timeout=5)
