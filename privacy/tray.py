@@ -83,15 +83,20 @@ def _draw_icon(state: TrayState):
     img  = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Shield outline: a pentagon-ish shape
+    # Shield outline
     shield = [
         (32, 4), (58, 16), (58, 36),
         (32, 60), (6, 36), (6, 16),
     ]
     draw.polygon(shield, fill=colour)
 
-    # White "S" lettermark in the centre
-    draw.text((22, 20), "S", fill="white")
+    # White "S" lettermark — use default bitmap font, no external files needed
+    try:
+        from PIL import ImageFont
+        font = ImageFont.load_default()
+        draw.text((24, 22), "S", fill="white", font=font)
+    except Exception:
+        draw.rectangle([26, 20, 38, 44], fill="white")  # fallback: white bar
 
     return img
 
