@@ -256,17 +256,21 @@ def is_downloaded() -> bool:
 def start() -> bool:
     """
     Start i2pd in the background and wait for the SOCKS5 port to open.
-
-    First run note: I2P spends 2–5 minutes building tunnels and populating
-    its network database. The SOCKS5 port opens quickly but traffic may not
-    flow until tunnels are ready. Subsequent starts are much faster (~30 s)
-    because the netDB is cached in data/i2p/.
     """
     global _i2p_proc
 
     if not is_downloaded():
         print("[i2p] i2pd not found. Downloading ...")
         download()
+
+    # Defender check: binary should exist right after download
+    if not I2P_BIN.exists():
+        print("\n[i2p] *** ERROR: i2pd binary missing after download ***")
+        print("[i2p] Windows Defender likely quarantined it (false positive).")
+        print("[i2p] Fix — run this in an Administrator PowerShell:")
+        print(f'[i2p]   Add-MpPreference -ExclusionPath "{I2P_DIR}"')
+        print("[i2p] Then restart AI Sentinel.")
+        return False
 
     _write_config()
 
@@ -295,6 +299,17 @@ def start() -> bool:
             creationflags=_no_window,
         )
 
+    # Give it half a second and check it didn't die immediately
+    time.sleep(0.5)
+    if _i2p_proc.poll() is not None:
+        if not I2P_BIN.exists():
+            print("\n[i2p] *** i2pd was quarantined by Defender while starting ***")
+            print(f'[i2p] Run as Admin:  Add-MpPreference -ExclusionPath "{I2P_DIR}"')
+        else:
+            print(f"\n[i2p] *** i2pd exited immediately (code {_i2p_proc.returncode}) ***")
+            _tail_log(log_path)
+        return False
+
     # Poll for SOCKS5 port — up to 60 s (port opens before tunnels are ready)
     print("[i2p] Waiting for SOCKS5 port ", end="", flush=True)
     try:
@@ -307,6 +322,16 @@ def start() -> bool:
                 print("[i2p] Note: tunnels may take another 2–5 min to fully build on first run.")
                 return True
             except (ConnectionRefusedError, OSError):
+                # Check if Defender killed it mid-startup
+                if _i2p_proc.poll() is not None:
+                    print()
+                    if not I2P_BIN.exists():
+                        print("[i2p] *** Defender quarantined i2pd during startup ***")
+                        print(f'[i2p] Run as Admin:  Add-MpPreference -ExclusionPath "{I2P_DIR}"')
+                    else:
+                        print(f"[i2p] i2pd died mid-startup (code {_i2p_proc.returncode})")
+                        _tail_log(log_path)
+                    return False
                 print(".", end="", flush=True)
                 time.sleep(0.5)
     except KeyboardInterrupt:
@@ -316,7 +341,8 @@ def start() -> bool:
 
     print()
     _tail_log(log_path)
-    print("[i2p] SOCKS5 port did not open within 60 s — check data/i2p/i2pd.log")
+    print("[i2p] SOCKS5 port did not open within 60 s.")
+    print(f"[i2p] Check: {log_path}")
     return False
 
 
