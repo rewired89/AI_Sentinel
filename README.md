@@ -39,7 +39,8 @@ When a website tries to fingerprint your browser — reading your screen size, g
 
 ### What does the shield icon mean?
 
-Look at the bottom-right corner of your screen (system tray). AI Sentinel shows a shield:
+On **Windows** the shield is in the bottom-right corner (system tray).
+On **Mac** it's in the top-right corner (menu bar).
 
 | Shield Color | Meaning |
 |---|---|
@@ -55,13 +56,24 @@ Look at the bottom-right corner of your screen (system tray). AI Sentinel shows 
 
 ### How do I set it up?
 
+#### Windows
 1. Make sure Python is installed on your PC
 2. Double-click **`install.bat`** — it installs everything and adds AI Sentinel to your Windows startup
-3. That's it. AI Sentinel will now start automatically every time you log in. You don't have to do anything.
+3. That's it. AI Sentinel will now start automatically every time you log in.
 
 To build the standalone `.exe` (no Python required after that):
 - Double-click **`build.bat`**
 - Run `dist\AIsentinel\AIsentinel.exe`
+
+#### Mac
+1. Make sure Python 3 is installed — open Terminal and type `python3 --version`. If it's not there, download it from python.org or run `brew install python`
+2. Open Terminal, drag the `AI_Sentinel` folder into it, and run:
+   ```
+   bash install.sh
+   ```
+3. That's it. AI Sentinel will start automatically at next login.
+
+> **First time on Mac:** When i2pd (the anonymity router) runs for the first time, macOS may show a security warning saying the app is from an unidentified developer. Go to **System Settings → Privacy & Security** and click **"Allow Anyway"**. You only have to do this once. i2pd is the official open-source I2P router, not malware — macOS just doesn't recognize unsigned binaries.
 
 ---
 
@@ -78,7 +90,7 @@ Slightly. I2P adds a small latency because your traffic takes a longer route. Mo
 ```
 Browser / App
      │
-     ▼ (Windows system proxy: 127.0.0.1:8877)
+     ▼ (system proxy: 127.0.0.1:8877 — set via winreg on Windows, networksetup on macOS)
 ┌─────────────────────────────────────────┐
 │         mitmproxy (port 8877)           │
 │  • C2 beacon heuristics (UA + path)     │
@@ -136,7 +148,9 @@ Injection is idempotent (marker attribute checked). Injected after `<head>` or b
 pystray-based tray icon using `run_detached()` (non-blocking, pystray manages its own Win32 HWND message pump thread). Icon drawn dynamically with PIL — dark rounded-rectangle background for taskbar visibility, state-colored shield polygon, bold S lettermark. States: STARTING / ACTIVE / SCANNING / THREAT / STOPPED. Thread-safe state transitions via `threading.Lock`.
 
 #### `privacy/autostart.py`
-Windows autostart via `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (no admin required). Defender exclusion via `Add-MpPreference -ExclusionPath` through PowerShell (requires elevation — prints manual instructions if not elevated).
+Cross-platform autostart and AV exclusion setup.
+- **Windows**: autostart via `HKCU\...\Run` (no admin); Defender exclusion via `Add-MpPreference` through PowerShell (requires elevation — prints manual fallback if not elevated)
+- **macOS**: autostart via `~/Library/LaunchAgents/com.ai-sentinel.plist` using `plistlib` + `launchctl load` (no admin); Gatekeeper instructions printed instead of Defender exclusion
 
 #### `privacy/identity.py`
 Ed25519 keypair generated with `cryptography` library. Public key is the user's only persistent identity — no accounts, no registration. Stored in `data/identity/`.
@@ -156,23 +170,35 @@ Ed25519 keypair generated with `cryptography` library. Public key is the user's 
 
 ### Running without the exe
 
+**Windows (PowerShell)**
 ```powershell
-# Install deps
 pip install -r requirements.txt
-
-# First-time setup (Defender exclusion + autostart)
-python -m privacy.privacy_main --setup
-
-# Run
+python -m privacy.privacy_main --setup   # first run: Defender exclusion + autostart
 python -m privacy.privacy_main
+```
 
-# Routing options
-python -m privacy.privacy_main --route=i2p     # default — I2P garlic routing
-python -m privacy.privacy_main --route=nym     # Nym mixnet (if available)
-python -m privacy.privacy_main --route=none    # scanning + poisoning only
+**macOS / Linux (Terminal)**
+```bash
+pip3 install -r requirements.txt
+python3 -m privacy.privacy_main --setup  # first run: LaunchAgent autostart
+python3 -m privacy.privacy_main
+# or just:
+bash install.sh   # does both steps above
+bash start.sh
+```
 
-# Install mitmproxy CA cert for HTTPS interception
-python -m privacy.privacy_main --setup-certs
+**Routing options (all platforms)**
+```bash
+python3 -m privacy.privacy_main --route=i2p     # default — I2P garlic routing
+python3 -m privacy.privacy_main --route=nym     # Nym mixnet (if available)
+python3 -m privacy.privacy_main --route=none    # scanning + poisoning only
+```
+
+**Install mitmproxy CA cert for HTTPS scanning**
+```bash
+python3 -m privacy.privacy_main --setup-certs
+# Windows: uses certutil (run as Administrator)
+# macOS:   uses 'sudo security add-trusted-cert' against System.keychain
 ```
 
 ### Environment variables (`.env` or shell)
@@ -184,17 +210,46 @@ python -m privacy.privacy_main --setup-certs
 
 Without API keys, domain reputation checks are skipped. C2 heuristics, fingerprint poisoning, and de-anonymization scanning still work without any keys.
 
-### Building the exe
+### Building the standalone app
 
+**Windows** — produces `dist\AIsentinel\AIsentinel.exe`
 ```powershell
 .\build.bat
 ```
 
-Runs PyInstaller with `build/sentinel.spec`. Output: `dist\AIsentinel\AIsentinel.exe` — fully self-contained, no Python required. The spec bundles `privacy/`, `app/`, `model/`, and `assets/sentinel.ico`. Hidden imports declared for mitmproxy, cryptography, pystray, sklearn, and bcrypt (pinned to 4.0.1 — bcrypt ≥ 4.1 removed the `__about__` attribute that passlib requires).
+**macOS** — produces `dist/AIsentinel/AIsentinel` (Unix binary)
+```bash
+pip3 install pyinstaller pillow
+python3 build/make_icon.py
+pyinstaller build/sentinel.spec --distpath dist --workpath build/work --noconfirm
+```
+
+Both use `build/sentinel.spec` via PyInstaller. The bundle includes `privacy/`, `app/`, `model/`, and `assets/sentinel.ico`. Hidden imports declared for mitmproxy, cryptography, pystray (Win32 + Darwin backends), plyer (Win + macOS), sklearn, and bcrypt (pinned to 4.0.1 — bcrypt ≥ 4.1 removed the `__about__` attribute that passlib requires).
+
+### Platform differences at a glance
+
+| Feature | Windows | macOS |
+|---|---|---|
+| System proxy | `winreg` (HKCU Internet Settings) | `networksetup` (all active services) |
+| Autostart | HKCU Run key | `~/Library/LaunchAgents/` plist |
+| CA cert install | `certutil -addstore` (as Admin) | `sudo security add-trusted-cert` |
+| AV exclusion | Defender `Add-MpPreference` | Gatekeeper "Allow Anyway" (one click) |
+| Notifications | winotify (Win11 toast) | plyer → macOS Notification Center |
+| Open threat log | `explorer.exe` | `open` |
+| Crash dialog | `MessageBoxW` | `osascript display alert` |
+| Shield location | Bottom-right taskbar (system tray) | Top-right menu bar |
 
 ### Known issues / workarounds
 
-- **Windows Defender quarantines i2pd.exe** — run `python -m privacy.privacy_main --setup` to add a Defender exclusion for `data/i2p/`
-- **mitmproxy only accepts `http://` upstream** — the SOCKS5 bridge exists specifically for this; i2pd's SOCKS5 on 4447 is not used directly by mitmproxy
-- **Tray icon invisible after first run** — Windows 11 hides new tray icons; go to Settings → Personalization → Taskbar → Other system tray icons and enable it. The built `.exe` registers its own app identity and stays visible permanently.
-- **bcrypt/passlib conflict** — pinned `bcrypt==4.0.1` in requirements.txt; do not upgrade
+**Windows**
+- **Defender quarantines i2pd.exe** — run `python -m privacy.privacy_main --setup` to add a Defender exclusion for `data/i2p/`
+- **Tray icon invisible after first run** — Windows 11 hides new tray icons; go to Settings → Personalization → Taskbar → Other system tray icons and enable it. The built `.exe` stays visible permanently.
+- **bcrypt/passlib conflict** — pinned `bcrypt==4.0.1`; do not upgrade
+
+**macOS**
+- **Gatekeeper blocks i2pd on first run** — open System Settings → Privacy & Security → click "Allow Anyway". One-time action.
+- **mitmproxy CA cert requires sudo** — `python3 -m privacy.privacy_main --setup-certs` will prompt for your password
+- **System proxy requires active network service name** — `networksetup -listallnetworkservices` is called automatically; if your VPN or custom interface isn't detected, set the proxy manually in System Settings → Network
+
+**All platforms**
+- **mitmproxy only accepts `http://` upstream** — the SOCKS5 bridge (`socks5_bridge.py`) exists for this; i2pd's port 4447 is never used directly by mitmproxy
