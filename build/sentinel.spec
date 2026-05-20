@@ -49,6 +49,7 @@ a = Analysis(
         # pystray + PIL
         'pystray',
         'pystray._win32',
+        'pystray._darwin',
         'PIL',
         'PIL.Image',
         'PIL.ImageDraw',
@@ -58,6 +59,8 @@ a = Analysis(
         'plyer.platforms',
         'plyer.platforms.win',
         'plyer.platforms.win.notification',
+        'plyer.platforms.macosx',
+        'plyer.platforms.macosx.notification',
         # other deps
         'requests',
         'dotenv',

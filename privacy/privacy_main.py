@@ -26,11 +26,14 @@ import time
 import signal
 import shutil
 import argparse
+import platform
 import subprocess
 import threading
 import traceback
 import urllib.parse as _urlparse
 from pathlib import Path
+
+_SYSTEM = platform.system()   # "Windows" | "Darwin" | "Linux"
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -77,63 +80,88 @@ _THREAT_TYPES = [
 ]
 
 def _show_startup_notification(routing: str | None) -> None:
-    """Show a modern Windows 10/11 toast notification."""
     route = routing if routing else "Scanning only"
     body  = f"{route} · {len(_THREAT_TYPES)} threat types monitored"
-    try:
-        from winotify import Notification
-        n = Notification(
-            app_id  = "AI Sentinel",
-            title   = "AI Sentinel — Active",
-            msg     = body,
-            duration= "short",
-        )
-        n.show()
-    except Exception:
+    if _SYSTEM == "Windows":
         try:
-            from plyer import notification as _notif
-            _notif.notify(title="AI Sentinel — Active", message=body,
-                          app_name="AI Sentinel", timeout=5)
+            from winotify import Notification
+            Notification(app_id="AI Sentinel", title="AI Sentinel — Active",
+                         msg=body, duration="short").show()
+            return
         except Exception:
             pass
+    # macOS / Linux / fallback
+    try:
+        from plyer import notification as _notif
+        _notif.notify(title="AI Sentinel — Active", message=body,
+                      app_name="AI Sentinel", timeout=5)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
-# Windows system proxy helpers
+# System proxy helpers (Windows + macOS)
 # ---------------------------------------------------------------------------
+
+def _mac_network_services() -> list[str]:
+    try:
+        out = subprocess.check_output(
+            ["networksetup", "-listallnetworkservices"],
+            text=True, stderr=subprocess.DEVNULL,
+        )
+        return [l.strip() for l in out.splitlines()
+                if l.strip() and not l.lower().startswith("an asterisk")]
+    except Exception:
+        return ["Wi-Fi", "Ethernet"]
+
 
 def _set_system_proxy(host: str, port: int) -> None:
-    """Point Windows system proxy (WinINet/WinHTTP) at our local scanning proxy."""
-    try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-            0, winreg.KEY_SET_VALUE,
-        )
-        winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"{host}:{port}")
-        winreg.SetValueEx(key, "ProxyEnable",  0, winreg.REG_DWORD, 1)
-        winreg.CloseKey(key)
-        print(f"[privacy] System proxy → {host}:{port}")
-    except ImportError:
-        print(f"[privacy] (non-Windows) Set your proxy manually to {host}:{port}")
-    except Exception as exc:
-        print(f"[privacy] Could not set system proxy: {exc}")
+    if _SYSTEM == "Windows":
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                0, winreg.KEY_SET_VALUE,
+            )
+            winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, f"{host}:{port}")
+            winreg.SetValueEx(key, "ProxyEnable",  0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(key)
+            print(f"[privacy] System proxy → {host}:{port}")
+        except Exception as exc:
+            print(f"[privacy] Could not set system proxy: {exc}")
+    elif _SYSTEM == "Darwin":
+        for svc in _mac_network_services():
+            subprocess.run(["networksetup", "-setwebproxy",       svc, host, str(port)],
+                           capture_output=True)
+            subprocess.run(["networksetup", "-setsecurewebproxy", svc, host, str(port)],
+                           capture_output=True)
+        print(f"[privacy] macOS system proxy → {host}:{port}")
+    else:
+        print(f"[privacy] Set your proxy manually to {host}:{port}")
 
 
 def _clear_system_proxy() -> None:
-    try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-            0, winreg.KEY_SET_VALUE,
-        )
-        winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
-        winreg.CloseKey(key)
-        print("[privacy] System proxy cleared.")
-    except Exception:
-        pass
+    if _SYSTEM == "Windows":
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                0, winreg.KEY_SET_VALUE,
+            )
+            winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+            winreg.CloseKey(key)
+            print("[privacy] System proxy cleared.")
+        except Exception:
+            pass
+    elif _SYSTEM == "Darwin":
+        for svc in _mac_network_services():
+            subprocess.run(["networksetup", "-setwebproxystate",       svc, "off"],
+                           capture_output=True)
+            subprocess.run(["networksetup", "-setsecurewebproxystate", svc, "off"],
+                           capture_output=True)
+        print("[privacy] macOS system proxy cleared.")
 
 
 # ---------------------------------------------------------------------------
@@ -141,16 +169,13 @@ def _clear_system_proxy() -> None:
 # ---------------------------------------------------------------------------
 
 def setup_certificates() -> None:
-    """
-    Install mitmproxy's CA certificate into the Windows trust store.
-    Must be run once (as Administrator) before HTTPS interception works.
-    """
+    """Install mitmproxy's CA certificate into the OS trust store."""
     cert_candidates = [
         Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.cer",
+        Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem",
         Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.p12",
     ]
 
-    # Generate the cert by starting mitmdump briefly if it doesn't exist yet
     if not any(c.exists() for c in cert_candidates):
         print("[privacy] Generating mitmproxy CA certificate ...")
         mitmdump = shutil.which("mitmdump")
@@ -169,15 +194,33 @@ def setup_certificates() -> None:
         return
 
     print(f"[privacy] Installing CA cert: {cert_path}")
-    result = subprocess.run(
-        ["certutil", "-addstore", "-user", "Root", str(cert_path)],
-        capture_output=True, text=True,
-    )
-    if result.returncode == 0:
-        print("[privacy] CA certificate installed. HTTPS scanning is active.")
+
+    if _SYSTEM == "Windows":
+        result = subprocess.run(
+            ["certutil", "-addstore", "-user", "Root", str(cert_path)],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print("[privacy] CA certificate installed. HTTPS scanning is active.")
+        else:
+            print(f"[privacy] certutil failed: {result.stderr.strip()}")
+            print("[privacy] Try running as Administrator or install the cert manually.")
+
+    elif _SYSTEM == "Darwin":
+        result = subprocess.run(
+            ["sudo", "security", "add-trusted-cert", "-d", "-r", "trustRoot",
+             "-k", "/Library/Keychains/System.keychain", str(cert_path)],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print("[privacy] CA certificate installed. HTTPS scanning is active.")
+        else:
+            print(f"[privacy] security command failed: {result.stderr.strip()}")
+            print(f"[privacy] Install manually: sudo security add-trusted-cert -d -r trustRoot "
+                  f"-k /Library/Keychains/System.keychain {cert_path}")
     else:
-        print(f"[privacy] certutil failed: {result.stderr.strip()}")
-        print("[privacy] Try running as Administrator or install the cert manually.")
+        print(f"[privacy] Install the CA cert manually from: {cert_path}")
+        print("[privacy] On Debian/Ubuntu: sudo cp cert.pem /usr/local/share/ca-certificates/ && sudo update-ca-certificates")
 
 
 # ---------------------------------------------------------------------------
@@ -401,17 +444,22 @@ if __name__ == "__main__":
     except Exception:
         tb = traceback.format_exc()
         _log("CRASH — unhandled exception:\n" + tb)
-        # On Windows, show a message box so the user knows something went wrong
         try:
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(
-                0,
-                f"AI Sentinel crashed on startup.\n\n"
-                f"Error log: {_STARTUP_LOG}\n\n"
-                f"{tb[-800:]}",
-                "AI Sentinel — Startup Error",
-                0x10,   # MB_ICONERROR
-            )
+            if _SYSTEM == "Windows":
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    f"AI Sentinel crashed on startup.\n\nError log: {_STARTUP_LOG}\n\n{tb[-800:]}",
+                    "AI Sentinel — Startup Error",
+                    0x10,
+                )
+            elif _SYSTEM == "Darwin":
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'display alert "AI Sentinel crashed." '
+                     f'message "Check log: {_STARTUP_LOG}"'],
+                    check=False,
+                )
         except Exception:
             pass
         sys.exit(1)

@@ -137,10 +137,16 @@ def set_state(state: TrayState, *, threat_host: str = "") -> None:
 
 
 def _open_log() -> None:
-    import subprocess
-    log = ROOT / "data" / "privacy_threats.json"
+    import subprocess, platform
+    log    = ROOT / "data" / "privacy_threats.json"
     target = str(log) if log.exists() else str(ROOT / "data")
-    subprocess.Popen(["explorer.exe", target])
+    system = platform.system()
+    if system == "Windows":
+        subprocess.Popen(["explorer.exe", target])
+    elif system == "Darwin":
+        subprocess.Popen(["open", target])
+    else:
+        subprocess.Popen(["xdg-open", target])
 
 
 def start(stop_callback) -> None:
