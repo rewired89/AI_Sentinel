@@ -57,23 +57,34 @@ On **Mac** it's in the top-right corner (menu bar).
 ### How do I set it up?
 
 #### Windows
-1. Make sure Python is installed on your PC
-2. Double-click **`install.bat`** — it installs everything and adds AI Sentinel to your Windows startup
-3. That's it. AI Sentinel will now start automatically every time you log in.
+1. Make sure Python 3.11+ is installed — download from [python.org](https://python.org). Tick **"Add Python to PATH"** during install.
+2. Double-click **`install.bat`**
 
-To build the standalone `.exe` (no Python required after that):
-- Double-click **`build.bat`**
-- Run `dist\AIsentinel\AIsentinel.exe`
+That's it. The installer will:
+- Install all required packages
+- Allow i2pd through Windows Defender (you'll see a permission prompt — click **Yes**)
+- Register AI Sentinel to start automatically at login
+- Launch AI Sentinel immediately
+
+The shield icon will appear in the **bottom-right taskbar**. Green = full protection. If it stays amber for more than 5 minutes, see the Troubleshooting section below.
+
+> **Want the standalone `.exe` instead?** (no Python required after building)
+> Stop any running AI Sentinel, then double-click **`build.bat`**. Takes 2–5 minutes. Run `dist\AIsentinel\AIsentinel.exe` when done.
 
 #### Mac
-1. Make sure Python 3 is installed — open Terminal and type `python3 --version`. If it's not there, download it from python.org or run `brew install python`
-2. Open Terminal, drag the `AI_Sentinel` folder into it, and run:
-   ```
+1. Make sure Python 3 is installed — open Terminal and type `python3 --version`. If missing: `brew install python` or download from python.org
+2. Open Terminal, `cd` into the `AI_Sentinel` folder, and run:
+   ```bash
    bash install.sh
    ```
-3. That's it. AI Sentinel will start automatically at next login.
 
-> **First time on Mac:** When i2pd (the anonymity router) runs for the first time, macOS may show a security warning saying the app is from an unidentified developer. Go to **System Settings → Privacy & Security** and click **"Allow Anyway"**. You only have to do this once. i2pd is the official open-source I2P router, not malware — macOS just doesn't recognize unsigned binaries.
+That's it. The installer will:
+- Install all required packages
+- Automatically remove the macOS quarantine flag from i2pd so Gatekeeper doesn't block it
+- Register AI Sentinel to start at login (LaunchAgent)
+- Launch AI Sentinel immediately
+
+The shield icon will appear in the **top-right menu bar**. If macOS still shows a security popup, go to **System Settings → Privacy & Security → Allow Anyway**.
 
 ---
 
@@ -225,6 +236,101 @@ pyinstaller build/sentinel.spec --distpath dist --workpath build/work --noconfir
 ```
 
 Both use `build/sentinel.spec` via PyInstaller. The bundle includes `privacy/`, `app/`, `model/`, and `assets/sentinel.ico`. Hidden imports declared for mitmproxy, cryptography, pystray (Win32 + Darwin backends), plyer (Win + macOS), sklearn, and bcrypt (pinned to 4.0.1 — bcrypt ≥ 4.1 removed the `__about__` attribute that passlib requires).
+
+### Troubleshooting
+
+#### Shield stays AMBER (no routing) — Windows
+
+The most common cause is Windows Defender quarantining `i2pd.exe` the moment it downloads. Fix it once and it never happens again:
+
+1. Open **PowerShell as Administrator** (right-click Start → Terminal (Admin))
+2. Run:
+   ```powershell
+   Add-MpPreference -ExclusionPath "C:\Users\<your-username>\Desktop\AI_Sentinel\data\i2p"
+   ```
+3. Restart AI Sentinel — right-click tray → Stop AI Sentinel, then double-click `start.bat`
+
+The shield should turn **green** within 2 minutes.
+
+> `install.bat` does this automatically if you run it as the first step. If you skipped it or ran the `.exe` directly, do the above once manually.
+
+---
+
+#### Shield stays AMBER (no routing) — macOS
+
+macOS Gatekeeper blocks unsigned binaries by default. When i2pd downloads and tries to run, macOS silently kills it.
+
+**Automatic fix** (handled by `install.sh` and `i2p_client.py`): the quarantine attribute is stripped from the binary immediately after download using `xattr -d com.apple.quarantine`. Most users will never see this issue.
+
+**If it still doesn't work:**
+1. Open **System Settings → Privacy & Security**
+2. Scroll down — you'll see a message about i2pd being blocked
+3. Click **"Allow Anyway"**
+4. Restart AI Sentinel: `bash start.sh`
+
+---
+
+#### Firewall / Router blocks I2P
+
+I2P needs to make outbound connections to build its tunnel network. If you're behind a strict firewall or corporate network:
+
+| What to allow | Protocol | Port |
+|---|---|---|
+| I2P tunnel traffic | UDP | any outbound (i2pd picks a random port) |
+| I2P NTCP2 transport | TCP | any outbound |
+| mitmproxy scanning proxy | TCP | 8877 (local only — no firewall rule needed) |
+
+If UDP is blocked entirely, I2P will fall back to TCP-only mode (slower but still works). If both UDP and TCP outbound are blocked (very strict corporate firewall), I2P cannot connect — use `--route=none` to run scanning + fingerprint poisoning only.
+
+---
+
+#### Windows Firewall blocks i2pd
+
+Windows Firewall may prompt you to allow i2pd when it first tries to connect. Click **"Allow access"**. If you dismissed the prompt, add it manually:
+
+1. Open **Windows Defender Firewall → Allow an app through firewall**
+2. Click **Change settings → Allow another app**
+3. Browse to `AI_Sentinel\data\i2p\i2pd.exe`
+4. Check both Private and Public, click OK
+
+---
+
+#### The exe (AIsentinel.exe) gets blocked on download
+
+Some browsers or antivirus tools block unsigned `.exe` downloads. If your browser says "this file is dangerous":
+- In Chrome/Edge: click the three dots next to the download → **Keep**
+- In Windows SmartScreen: click **More info → Run anyway**
+
+The exe is built from this open-source repo using PyInstaller. If you don't trust the pre-built exe, build it yourself: `.\build.bat`
+
+---
+
+#### HTTPS sites don't load through the proxy
+
+mitmproxy needs its CA certificate trusted by your system to intercept HTTPS. Run this once:
+
+**Windows** (as Administrator):
+```powershell
+python -m privacy.privacy_main --setup-certs
+```
+
+**macOS:**
+```bash
+python3 -m privacy.privacy_main --setup-certs
+```
+
+Then restart your browser. After that, all HTTPS traffic is scanned.
+
+---
+
+#### I2P is slow / some sites don't load
+
+This is normal for I2P. It routes through multiple encrypted hops — speed is the tradeoff for anonymity. Tips:
+- Wait 5–10 minutes after first start for tunnels to fully build
+- `.i2p` hidden services are fast; clearnet sites go through an "outproxy" which is slower
+- If a specific site is unreachable, it may not be accessible via the I2P outproxy — try `--route=none` for that session
+
+---
 
 ### Platform differences at a glance
 

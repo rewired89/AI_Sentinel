@@ -181,6 +181,17 @@ def _install(archive: Path, fmt: str) -> None:
     if _SYSTEM != "Windows" and I2P_BIN.exists():
         I2P_BIN.chmod(0o755)
 
+    if _SYSTEM == "Darwin" and I2P_BIN.exists():
+        # Strip the Gatekeeper quarantine attribute so macOS doesn't block the
+        # binary with an "unidentified developer" popup on first run.
+        try:
+            import subprocess as _sp
+            _sp.run(["xattr", "-d", "com.apple.quarantine", str(I2P_BIN)],
+                    capture_output=True)
+            print("[i2p] Removed macOS quarantine attribute from i2pd.")
+        except Exception:
+            pass
+
     if not I2P_BIN.exists():
         raise RuntimeError(
             f"[i2p] i2pd binary not found after unpack.\n"
