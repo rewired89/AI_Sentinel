@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AI Sentinel — macOS / Linux install script
+# AI Sentinel — macOS / Linux setup
 # Run once: bash install.sh
 
 set -e
@@ -11,87 +11,38 @@ echo "   AI SENTINEL — Setup"
 echo "  ============================================================"
 echo ""
 
-# ---------------------------------------------------------------------------
-# Step 1 — Python check
-# ---------------------------------------------------------------------------
+# Check Python 3
 if ! command -v python3 &>/dev/null; then
     echo "  ERROR: python3 not found."
-    echo ""
-    echo "  macOS:  brew install python   OR   download from https://python.org"
+    echo "  macOS:  brew install python   or   https://python.org"
     echo "  Linux:  sudo apt install python3 python3-pip"
     exit 1
 fi
 
-PYTHON=$(command -v python3)
-echo "  [1/5] Python found: $($PYTHON --version)"
-
-# ---------------------------------------------------------------------------
-# Step 2 — Install dependencies
-# ---------------------------------------------------------------------------
-echo "  [2/5] Installing packages (may take 2-5 min on first run)..."
-$PYTHON -m pip install -r requirements.txt --quiet
-echo "  [2/5] Packages ready."
+# Install dependencies
+echo "  Installing packages..."
+python3 -m pip install -r requirements.txt --quiet
+echo "  Packages ready."
 echo ""
 
-# ---------------------------------------------------------------------------
-# Step 3 — macOS: pre-clear Gatekeeper quarantine on i2pd
-#           i2pd is an unsigned binary. macOS stamps downloaded files with a
-#           quarantine attribute that triggers the "unidentified developer"
-#           popup. We remove it as soon as the binary is downloaded so the
-#           user never sees the warning.
-# ---------------------------------------------------------------------------
-if [[ "$(uname)" == "Darwin" ]]; then
-    echo "  [3/5] Preparing for macOS security (Gatekeeper)..."
-    mkdir -p data/i2p
-    # Hook: after i2pd downloads we strip the quarantine bit automatically.
-    # The actual download happens on first start; this creates a wrapper that
-    # strips the attribute right after download completes.
-    cat > data/i2p/.post_download_hook.sh << 'HOOK'
-#!/usr/bin/env bash
-# Called by i2p_client.py after binary is installed on macOS
-if [[ -f "$(dirname "$0")/i2pd" ]]; then
-    xattr -d com.apple.quarantine "$(dirname "$0")/i2pd" 2>/dev/null || true
-    echo "[i2p] Gatekeeper quarantine attribute removed."
-fi
-HOOK
-    chmod +x data/i2p/.post_download_hook.sh
-    echo "  [3/5] Gatekeeper hook ready (quarantine will be stripped automatically)."
-else
-    echo "  [3/5] Skipped (Gatekeeper only applies to macOS)."
-fi
+# Launch — auto-setup (LaunchAgent autostart + Gatekeeper fix) runs
+# automatically on first launch inside privacy_main.py
+echo "  Starting AI Sentinel..."
+echo "  On first launch, autostart and security settings are configured"
+echo "  automatically. You do not need to do anything else."
 echo ""
 
-# ---------------------------------------------------------------------------
-# Step 4 — Register autostart
-# ---------------------------------------------------------------------------
-echo "  [4/5] Registering autostart at login..."
-$PYTHON -m privacy.privacy_main --setup
-echo ""
+python3 -m privacy.privacy_main &
 
-# ---------------------------------------------------------------------------
-# Step 5 — Launch AI Sentinel
-# ---------------------------------------------------------------------------
-echo "  [5/5] Starting AI Sentinel..."
-$PYTHON -m privacy.privacy_main &
-SENTINEL_PID=$!
-
-echo ""
 echo "  ============================================================"
 echo ""
-echo "   AI Sentinel is running (PID $SENTINEL_PID)."
 if [[ "$(uname)" == "Darwin" ]]; then
     echo "   Look for the shield icon in the menu bar (top-right)."
 else
-    echo "   Look for the shield icon in your system tray."
+    echo "   Look for the shield icon in the system tray."
 fi
 echo ""
-echo "   GREEN shield  = Full protection (I2P + scanning)"
-echo "   AMBER shield  = Scanning only (I2P is still connecting)"
-echo "   RED shield    = Threat detected"
-echo ""
-echo "   If the shield stays AMBER after 5 minutes on macOS:"
-echo "     System Settings → Privacy & Security → Allow Anyway (for i2pd)"
-echo "   Then restart: bash start.sh"
+echo "   GREEN = full protection    AMBER = starting up    RED = threat"
 echo ""
 echo "  ============================================================"
 echo ""

@@ -56,35 +56,34 @@ On **Mac** it's in the top-right corner (menu bar).
 
 ### How do I set it up?
 
-#### Windows
-1. Make sure Python 3.11+ is installed — download from [python.org](https://python.org). Tick **"Add Python to PATH"** during install.
-2. Double-click **`install.bat`**
+#### Windows — standalone exe (recommended)
+1. Build or download `AIsentinel.exe`
+2. Double-click it
 
-That's it. The installer will:
-- Install all required packages
-- Allow i2pd through Windows Defender (you'll see a permission prompt — click **Yes**)
-- Register AI Sentinel to start automatically at login
-- Launch AI Sentinel immediately
+That's it. On first launch it automatically:
+- Asks for one Windows permission prompt (UAC) — click **Yes**
+- Adds i2pd to Defender exclusions so it never gets quarantined
+- Registers itself to start at login
+- Starts running
 
-The shield icon will appear in the **bottom-right taskbar**. Green = full protection. If it stays amber for more than 5 minutes, see the Troubleshooting section below.
+The shield appears in the **bottom-right taskbar**. You never have to touch it again.
 
-> **Want the standalone `.exe` instead?** (no Python required after building)
-> Stop any running AI Sentinel, then double-click **`build.bat`**. Takes 2–5 minutes. Run `dist\AIsentinel\AIsentinel.exe` when done.
+> **To build the exe yourself:** stop any running AI Sentinel, double-click **`build.bat`**, wait 2–5 minutes. The exe is at `dist\AIsentinel\AIsentinel.exe`.
+
+> **No exe? Python installed?** Double-click **`install.bat`** instead — same result, same one permission prompt.
 
 #### Mac
-1. Make sure Python 3 is installed — open Terminal and type `python3 --version`. If missing: `brew install python` or download from python.org
-2. Open Terminal, `cd` into the `AI_Sentinel` folder, and run:
+1. Open Terminal, `cd` into the `AI_Sentinel` folder, run:
    ```bash
    bash install.sh
    ```
 
-That's it. The installer will:
-- Install all required packages
-- Automatically remove the macOS quarantine flag from i2pd so Gatekeeper doesn't block it
-- Register AI Sentinel to start at login (LaunchAgent)
-- Launch AI Sentinel immediately
+That's it. On first launch it automatically:
+- Installs all required packages
+- Registers AI Sentinel to start at login
+- Removes the macOS security flag from i2pd so it runs without popups
 
-The shield icon will appear in the **top-right menu bar**. If macOS still shows a security popup, go to **System Settings → Privacy & Security → Allow Anyway**.
+The shield appears in the **top-right menu bar**.
 
 ---
 

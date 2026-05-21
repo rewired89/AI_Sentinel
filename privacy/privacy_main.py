@@ -224,6 +224,98 @@ def setup_certificates() -> None:
 
 
 # ---------------------------------------------------------------------------
+# First-run auto-setup (runs silently on first launch)
+# ---------------------------------------------------------------------------
+
+_SETUP_FLAG = ROOT / "data" / ".setup_done"
+
+
+def _auto_setup() -> None:
+    """
+    Called once on first launch. Silently handles everything so the user
+    never has to open a terminal or run a separate installer.
+
+    Windows: spawns an elevated PowerShell to add the Defender exclusion
+             (one UAC prompt), then registers autostart in the registry.
+    macOS:   registers the LaunchAgent for autostart. Gatekeeper is handled
+             in i2p_client._install() via xattr when i2pd downloads.
+    """
+    if _SETUP_FLAG.exists():
+        return
+
+    _SETUP_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    _log("First launch — running auto-setup...")
+
+    if _SYSTEM == "Windows":
+        # --- Defender exclusion ---
+        # Spawn an elevated PowerShell just to run Add-MpPreference.
+        # The UAC dialog appears once — user clicks Yes — and we move on.
+        i2p_dir = ROOT / "data" / "i2p"
+        i2p_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            _no_window = subprocess.CREATE_NO_WINDOW
+            subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    f"Start-Process powershell "
+                    f"-ArgumentList '-NoProfile -NonInteractive -Command "
+                    f"Add-MpPreference -ExclusionPath \\\"{i2p_dir}\\\"' "
+                    f"-Verb RunAs -Wait",
+                ],
+                timeout=60,
+                creationflags=_no_window,
+                capture_output=True,
+            )
+            _log("Defender exclusion added.")
+        except Exception as exc:
+            _log(f"Defender exclusion failed (non-fatal): {exc}")
+
+        # --- Autostart (no admin needed) ---
+        try:
+            import winreg
+            python_exe  = Path(sys.executable)
+            pythonw     = python_exe.parent / "pythonw.exe"
+            runner      = str(pythonw) if pythonw.exists() else str(python_exe)
+            cmd         = f'"{runner}" "{ROOT / "privacy" / "privacy_main.py"}"'
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0, winreg.KEY_SET_VALUE,
+            )
+            winreg.SetValueEx(key, "AI-Sentinel-Privacy", 0, winreg.REG_SZ, cmd)
+            winreg.CloseKey(key)
+            _log("Autostart registered.")
+        except Exception as exc:
+            _log(f"Autostart registration failed (non-fatal): {exc}")
+
+    elif _SYSTEM == "Darwin":
+        # LaunchAgent autostart
+        try:
+            import plistlib
+            plist_dir  = Path.home() / "Library" / "LaunchAgents"
+            plist_path = plist_dir / "com.ai-sentinel.plist"
+            plist_dir.mkdir(parents=True, exist_ok=True)
+            plist = {
+                "Label":             "com.ai-sentinel",
+                "ProgramArguments":  [sys.executable, "-m", "privacy.privacy_main"],
+                "WorkingDirectory":  str(ROOT),
+                "RunAtLoad":         True,
+                "KeepAlive":         False,
+                "StandardOutPath":   str(ROOT / "data" / "sentinel_stdout.log"),
+                "StandardErrorPath": str(ROOT / "data" / "sentinel_stderr.log"),
+            }
+            with open(plist_path, "wb") as f:
+                plistlib.dump(plist, f)
+            subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
+            _log("macOS LaunchAgent registered.")
+        except Exception as exc:
+            _log(f"LaunchAgent registration failed (non-fatal): {exc}")
+
+    _SETUP_FLAG.write_text("setup complete\n")
+    _log("Auto-setup done.")
+
+
+# ---------------------------------------------------------------------------
 # Scanning proxy launcher
 # ---------------------------------------------------------------------------
 
@@ -283,6 +375,9 @@ def main() -> None:
         from privacy.autostart import remove_startup as _rm
         _rm()
         return
+
+    # First launch: silently configure Defender exclusion + autostart
+    _auto_setup()
 
     print("=" * 62)
     print("  AI SENTINEL — PRIVACY LAYER")
