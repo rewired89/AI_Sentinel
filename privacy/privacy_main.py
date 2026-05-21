@@ -68,33 +68,25 @@ PROXY_PORT  = 8877
 # Startup notification
 # ---------------------------------------------------------------------------
 
-_THREAT_TYPES = [
-    "Malware & virus domains (VirusTotal)",
-    "Hacker C2 beacon patterns",
-    "Threat intelligence feeds (OTX/AbuseIPDB)",
-    "WebRTC IP address leaks",
-    "Canvas & device fingerprinting",
-    "Browser tracking libraries (FingerprintJS etc.)",
-    "Plugin & font enumeration tracking",
-    "External IP probe scripts",
-]
-
 def _show_startup_notification(routing: str | None) -> None:
-    route = routing if routing else "Scanning only"
-    body  = f"{route} · {len(_THREAT_TYPES)} threat types monitored"
+    if routing:
+        title = "AI Sentinel — Active"
+        body  = f"I2P routing + scanning · fingerprints poisoned"
+    else:
+        title = "AI Sentinel — Scanning"
+        body  = "Scanning + fingerprint poisoning active · I2P connecting"
+
     if _SYSTEM == "Windows":
         try:
             from winotify import Notification
-            Notification(app_id="AI Sentinel", title="AI Sentinel — Active",
+            Notification(app_id="AI Sentinel", title=title,
                          msg=body, duration="short").show()
             return
         except Exception:
             pass
-    # macOS / Linux / fallback
     try:
         from plyer import notification as _notif
-        _notif.notify(title="AI Sentinel — Active", message=body,
-                      app_name="AI Sentinel", timeout=5)
+        _notif.notify(title=title, message=body, app_name="AI Sentinel", timeout=5)
     except Exception:
         pass
 
@@ -460,15 +452,10 @@ def main() -> None:
     # 6. System proxy
     _set_system_proxy(PROXY_HOST, args.proxy_port)
 
-    # Hint first-time users about setup wizard
-    from privacy.autostart import is_in_startup
-    if not is_in_startup():
-        print("[privacy] Tip: run with --setup to add autostart + Defender exclusion.")
-
-    # Update tray to reflect actual running state
+    # Update tray — ACTIVE (green) if I2P is routing, SCANNING (amber) if not
     _tray.set_state(TrayState.ACTIVE if upstream else TrayState.SCANNING)
 
-    # Show startup notification so the user knows protection is active
+    # One notification when everything is ready — no separate "starting" notification
     _show_startup_notification(routing_label if upstream else None)
 
     print(f"""

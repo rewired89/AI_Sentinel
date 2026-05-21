@@ -25,16 +25,17 @@ sys.path.insert(0, str(ROOT))
 
 
 class TrayState(Enum):
-    STARTING = "starting"
     ACTIVE   = "active"
     SCANNING = "scanning"
     THREAT   = "threat"
     STOPPED  = "stopped"
 
 
-_state      = TrayState.STARTING
-_state_lock = threading.Lock()
-_tray_icon  = None
+_state         = TrayState.SCANNING   # start amber — never show "Starting..."
+_state_lock    = threading.Lock()
+_tray_icon     = None
+_blocked_count = 0                    # live count of threats blocked this session
+_blocked_lock  = threading.Lock()
 
 
 def _tray_log(msg: str) -> None:
@@ -49,33 +50,42 @@ def _tray_log(msg: str) -> None:
         pass
 
 
+def increment_blocked() -> int:
+    """Called by sentinel_proxy each time a threat is blocked. Returns new count."""
+    global _blocked_count
+    with _blocked_lock:
+        _blocked_count += 1
+        count = _blocked_count
+    _refresh_tooltip()
+    return count
+
+
+def _refresh_tooltip() -> None:
+    """Push current label to the tray icon without changing state."""
+    if _tray_icon:
+        try:
+            _tray_icon.title = _label()
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # State label (tooltip text)
 # ---------------------------------------------------------------------------
 
-_SUMMARY = (
-    "Protecting against:\n"
-    "  Malware & virus domains\n"
-    "  Hacker C2 beacons\n"
-    "  OTX threat intelligence\n"
-    "  WebRTC IP leaks\n"
-    "  Canvas fingerprinting\n"
-    "  Browser tracking libraries\n"
-    "  Plugin/font enumeration\n"
-    "  External IP probes"
-)
-
-
 def _label() -> str:
     with _state_lock:
         s = _state
-    # Keep tooltip short — Windows truncates long tray tooltips
+    with _blocked_lock:
+        n = _blocked_count
+
+    blocked_line = f"{n} threat{'s' if n != 1 else ''} blocked this session"
+
     return {
-        TrayState.STARTING: "AI Sentinel\nStarting...",
-        TrayState.ACTIVE:   "AI Sentinel\nACTIVE — I2P + Scanning\nProtecting against 8 threat types",
-        TrayState.SCANNING: "AI Sentinel\nScanning Only (no routing)\nProtecting against 8 threat types",
-        TrayState.THREAT:   "AI Sentinel\n⚠ THREAT DETECTED\nCheck notification for details",
-        TrayState.STOPPED:  "AI Sentinel\nStopped",
+        TrayState.ACTIVE:   f"AI Sentinel — ACTIVE\nI2P routing + scanning\n{blocked_line}",
+        TrayState.SCANNING: f"AI Sentinel — SCANNING\nRouting connecting...\n{blocked_line}",
+        TrayState.THREAT:   f"AI Sentinel — THREAT DETECTED\n{blocked_line}",
+        TrayState.STOPPED:  "AI Sentinel — Stopped",
     }.get(s, "AI Sentinel")
 
 
@@ -87,9 +97,8 @@ def _make_icon(state: TrayState):
     from PIL import Image, ImageDraw
 
     _COLOURS = {
-        TrayState.STARTING: "#6b7280",
         TrayState.ACTIVE:   "#22c55e",   # green
-        TrayState.SCANNING: "#f59e0b",   # amber — bolder than yellow
+        TrayState.SCANNING: "#f59e0b",   # amber
         TrayState.THREAT:   "#ef4444",   # red
         TrayState.STOPPED:  "#6b7280",   # grey
     }

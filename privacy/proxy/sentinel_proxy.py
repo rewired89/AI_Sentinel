@@ -30,16 +30,17 @@ from privacy.proxy.poison_injector import inject as _poison_inject
 from privacy.alerts import notify, notify_deanon
 
 def _tray_threat(host: str = "") -> None:
-    """Flash the tray icon red, then restore after 30 s."""
+    """Increment blocked counter, flash tray red for 30 s, then restore."""
     try:
         import privacy.tray as _tray
         from privacy.tray import TrayState
+        _tray.increment_blocked()
+        prev = _tray._state
         _tray.set_state(TrayState.THREAT, threat_host=host)
         def _restore():
             import time
             time.sleep(30)
-            _tray.set_state(TrayState.ACTIVE)
-        import threading
+            _tray.set_state(prev)
         threading.Thread(target=_restore, daemon=True).start()
     except Exception:
         pass
