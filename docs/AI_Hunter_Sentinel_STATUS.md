@@ -1,4 +1,4 @@
-﻿# AI Hunter Sentinel - Status (Windows MVP)
+﻿# AI Sentinel - Status (Windows MVP)
 
 Generated: 2025-08-16 21:13:03
 

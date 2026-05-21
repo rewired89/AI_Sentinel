@@ -53,7 +53,7 @@ def block_ip(ip):
                         f"name=Block_{ip}_out", "dir=out", "action=block", f"remoteip={ip}"],
                        capture_output=True, text=True)
         print(f"🛑 Blocked IP: {ip}")
-        toast.show_toast("AI Hunter – OTX Blocked 🚫", f"Blocked malicious IP: {ip}", duration=5)
+        toast.show_toast("AI Sentinel – OTX Blocked 🚫", f"Blocked malicious IP: {ip}", duration=5)
         _notify("otx_threat_found", ip=ip)
         BLOCKED_IPS.add(ip)
     except Exception as e:

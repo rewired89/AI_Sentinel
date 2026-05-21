@@ -56,7 +56,7 @@ def monitor():
                     log_reconnection(ip)
                     reapply_block(ip)
                     toast.show_toast(
-                        "AI Hunter Alert – Reconnection ⚠️",
+                        "AI Sentinel Alert – Reconnection ⚠️",
                         f"Blocked IP tried to reconnect: {ip}",
                         duration=5
                     )

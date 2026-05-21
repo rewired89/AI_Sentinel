@@ -264,7 +264,7 @@ def quarantine_process(anomaly):
 
         print(f"☠️  Quarantined and killed: {name} (PID {pid})")
         safe_toast(
-            "AI Hunter Sentinel– Threat Quarantined ☣️",
+            "AI Sentinel– Threat Quarantined ☣️",
             f"{name} (PID {pid}) quarantined and terminated.",
             seconds=5
         )

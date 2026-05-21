@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # -------- Constants --------
-REPORTS_DIR_NAME = "AI Hunter Sentinel Reports"   # fixed folder name on Desktop
+REPORTS_DIR_NAME = "AI Sentinel Reports"   # fixed folder name on Desktop
 ENV_REPORTS_DIR  = "AIHUNTER_REPORTS_DIR"         # optional override: full path
 
 # Project & data paths
@@ -24,7 +24,7 @@ def _desktop_reports_root() -> Path:
     Returns the reports root directory.
     Priority:
       1) AIHUNTER_REPORTS_DIR env var (absolute path)
-      2) <Desktop>/AI Hunter Sentinel Reports
+      2) <Desktop>/AI Sentinel Reports
     """
     override = os.getenv(ENV_REPORTS_DIR, "").strip()
     if override:
@@ -68,7 +68,7 @@ def _zip_folder(src_dir: Path, zip_path: Path):
 def save_incident_report(trigger_time: datetime, findings: dict) -> Path:
     """
     Create a timestamped incident folder under:
-      <Desktop>/AI Hunter Sentinel Reports/INCIDENT_YYYYMMDD_HHMMSS
+      <Desktop>/AI Sentinel Reports/INCIDENT_YYYYMMDD_HHMMSS
 
     Contents:
       - report.json (summary & environment)
@@ -124,7 +124,7 @@ def save_incident_report(trigger_time: datetime, findings: dict) -> Path:
     _write_text(incident_dir / "report.json", json.dumps(report, indent=2))
 
     # README.txt
-    readme = f"""AI Hunter Sentinel – Incident Package
+    readme = f"""AI Sentinel – Incident Package
 
 Created: {datetime.now().isoformat()}
 Computer: {env['hostname']}  User: {env['username']}

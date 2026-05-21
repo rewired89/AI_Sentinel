@@ -86,7 +86,7 @@ def block_domain_ips(domain: str) -> list[str]:
 def sanitize_clipboard():
     """Replace dangerous clipboard content with a safe marker."""
     try:
-        pyperclip.copy("[AI Hunter blocked a malicious URL]")
+        pyperclip.copy("[AI Sentinel blocked a malicious URL]")
     except Exception:
         pass
 
@@ -116,7 +116,7 @@ def main():
                         sanitize_clipboard()
                         ips = block_domain_ips(domain)
                         toast.show_toast(
-                            "AI Hunter – Malicious URL Blocked 🚫",
+                            "AI Sentinel – Malicious URL Blocked 🚫",
                             f"{domain} flagged (score {score}). Clipboard sanitized.",
                             duration=5
                         )

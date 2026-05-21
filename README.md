@@ -27,7 +27,7 @@ Think of AI Sentinel as four bodyguards working together:
 #### 🛡️ Bodyguard 1 — The Traffic Guard (Scanning Proxy)
 Every single connection your computer makes — every website, every app, every background request — passes through AI Sentinel first. It checks it against known hacker and malware databases. If something looks like a hacker's remote control signal (a "C2 beacon"), it gets blocked immediately. You get a notification.
 
-#### 🤖 Bodyguard 2 — The AI Hunter (Autonomous Threat Intelligence)
+#### 🤖 Bodyguard 2 — The Self-Learning Shield (Autonomous Threat Intelligence)
 Every hour, AI Sentinel goes out and checks the internet's most up-to-date "most wanted" lists — real databases of active malware servers, botnet command centers, and phishing sites. It takes every new threat it finds and sends it to Claude AI, which **writes its own blocking scripts on the spot**. No update to download. No button to click. By the time a new virus starts spreading at 3am, AI Sentinel has already written a rule to block it and loaded it automatically before you wake up.
 
 #### 🌐 Bodyguard 3 — The Route Changer (I2P Routing)

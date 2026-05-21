@@ -55,7 +55,7 @@ def _prompt_yes_no(title: str, message: str) -> bool:
         root.destroy()
         return bool(res)
     except Exception:
-        print(f"[AI Hunter] {title}: {message} -> (no GUI; default NO)")
+        print(f"[AI Sentinel] {title}: {message} -> (no GUI; default NO)")
         return False
 
 def neutralize_active_suspects() -> tuple[int, list]:
@@ -70,7 +70,7 @@ def neutralize_active_suspects() -> tuple[int, list]:
     try:
         suspects = list(list_suspects())  # iterable of psutil.Process or similar
     except Exception as e:
-        print(f"[AI Hunter] Could not list suspects: {e}")
+        print(f"[AI Sentinel] Could not list suspects: {e}")
         return 0, [(-1, f"list_suspects failed: {e}")]
     for proc in suspects:
         pid = getattr(proc, "pid", None)
@@ -87,7 +87,7 @@ def maybe_temp_offline_on_failure(has_failures: bool):
     """If any neutralization failed, offer ~30s offline with auto-restore."""
     if not has_failures:
         return
-    title = "AI Hunter Sentinel – Extra Protection"
+    title = "AI Sentinel – Extra Protection"
     msg = ("We couldn’t terminate at least one suspicious process.\n\n"
            "Recommended: temporarily go OFFLINE for about 30 seconds to protect you while we keep watching.\n\n"
            "Proceed?")
@@ -122,7 +122,7 @@ def maybe_make_report(trigger_time: datetime, counts: dict):
         print(f"📄 Incident report saved to: {incident_dir}")
 
 def main():
-    print("🚀 AI Hunter Sentinel – One-shot mode (two passes + optional radical)")
+    print("🚀 AI Sentinel – One-shot mode (two passes + optional radical)")
 
     # -------- Pass 1 --------
     t0 = datetime.now()
@@ -160,8 +160,8 @@ def main():
             from tkinter import messagebox
             root = tk.Tk(); root.withdraw()
             res = messagebox.askyesno(
-                "AI Hunter Sentinel – Persistent Threats",
-                f"AI Hunter Sentinel still found {count} issue(s) after remediation.\n\n"
+                "AI Sentinel – Persistent Threats",
+                f"AI Sentinel still found {count} issue(s) after remediation.\n\n"
                 "We strongly recommend blocking all internet traffic now to stop any active threats.\n\n"
                 "Yes = Block internet immediately.\n"
                 "No  = Keep internet active (less safe)."
@@ -178,14 +178,14 @@ def main():
             from tkinter import messagebox
             root = tk.Tk(); root.withdraw()
             if messagebox.askyesno(
-                "AI Hunter Sentinel – Kill-Switch Applied",
+                "AI Sentinel – Kill-Switch Applied",
                 "Internet access is now BLOCKED.\n\nDo you want to REBOOT now?\n"
                 "Yes = Reboot immediately\nNo  = Choose another option"
             ):
                 root.destroy()
                 return "reboot"
             if messagebox.askyesno(
-                "AI Hunter Sentinel – Optional Shutdown",
+                "AI Sentinel – Optional Shutdown",
                 "Do you want to SHUT DOWN instead?\n"
                 "Yes = Shutdown immediately\nNo  = Keep system running"
             ):

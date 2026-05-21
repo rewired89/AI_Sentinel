@@ -72,7 +72,7 @@ def check_quarantine():
     return {"exists": True, "zips": report}
 
 def main():
-    print(f"AI Hunter – Artifact Validator")
+    print(f"AI Sentinel – Artifact Validator")
     print(f"ROOT = {ROOT}")
     print(f"DATA = {DATA}")
     print(f"LOG  = {LOG}")

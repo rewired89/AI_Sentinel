@@ -14,7 +14,7 @@ def maybe_windows_alert(title: str, message: str):
             pass
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Hunter Sentinel - Message Scanner")
+    parser = argparse.ArgumentParser(description="AI Sentinel - Message Scanner")
     parser.add_argument("--subject", default="", help="Email subject")
     parser.add_argument("--text", default="", help="Plain text body")
     parser.add_argument("--html", default="", help="HTML body (optional)")
@@ -38,7 +38,7 @@ def main():
                 host = ""
         reason = first.get("reason", out["verdict"])
         msg = f"Access to {host or 'the link'} was blocked/flagged.\nReason: {reason}."
-        title = "AI Hunter — Security Alert"
+        title = "AI Sentinel — Security Alert"
         maybe_windows_alert(title, msg)
 
     # Exit codes

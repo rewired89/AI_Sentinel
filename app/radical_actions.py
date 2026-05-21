@@ -37,7 +37,7 @@ def _ensure_dirs():
 def _toast(msg: str):
     try:
         from win10toast import ToastNotifier
-        ToastNotifier().show_toast("AI Hunter – Radical Mode", msg, duration=5)
+        ToastNotifier().show_toast("AI Sentinel – Radical Mode", msg, duration=5)
     except Exception:
         print(f"[Toast] {msg}")
 

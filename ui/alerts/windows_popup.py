@@ -6,7 +6,7 @@ from tkinter import ttk
 def show_alert(title: str, message: str):
     # Create a tiny, always-on-top window with English UI
     root = tk.Tk()
-    root.title(title or "AI Hunter — Security Alert")
+    root.title(title or "AI Sentinel — Security Alert")
     root.attributes("-topmost", True)
     root.resizable(False, False)
 
