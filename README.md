@@ -22,17 +22,20 @@ Normally when you browse the internet, three things happen that you probably don
 
 ### What does it actually do?
 
-Think of AI Sentinel as three bodyguards working together:
+Think of AI Sentinel as four bodyguards working together:
 
 #### 🛡️ Bodyguard 1 — The Traffic Guard (Scanning Proxy)
 Every single connection your computer makes — every website, every app, every background request — passes through AI Sentinel first. It checks it against known hacker and malware databases. If something looks like a hacker's remote control signal (a "C2 beacon"), it gets blocked immediately. You get a notification.
 
-#### 🌐 Bodyguard 2 — The Route Changer (I2P Routing)
+#### 🤖 Bodyguard 2 — The AI Hunter (Autonomous Threat Intelligence)
+Every hour, AI Sentinel goes out and checks the internet's most up-to-date "most wanted" lists — real databases of active malware servers, botnet command centers, and phishing sites. It takes every new threat it finds and sends it to Claude AI, which **writes its own blocking scripts on the spot**. No update to download. No button to click. By the time a new virus starts spreading at 3am, AI Sentinel has already written a rule to block it and loaded it automatically before you wake up.
+
+#### 🌐 Bodyguard 3 — The Route Changer (I2P Routing)
 Instead of your traffic going straight from your computer to the website (where your ISP can see everything), AI Sentinel bounces it through the **I2P network** — a private underground internet made up of thousands of computers worldwide. Your ISP sees an encrypted blob going to an I2P node. They have no idea what sites you're visiting. The website sees an I2P exit IP, not yours.
 
 Think of it like: instead of driving your car directly to a destination (where cameras on the road see you), you get into a tunnel system with thousands of other cars, switch vehicles a few times, and come out somewhere else. Nobody who was watching the road knows where you went.
 
-#### 🎭 Bodyguard 3 — The Faker (Fingerprint Poisoning)
+#### 🎭 Bodyguard 4 — The Faker (Fingerprint Poisoning)
 When a website tries to fingerprint your browser — reading your screen size, graphics card, number of CPU cores, installed fonts, timezone — AI Sentinel intercepts that and **feeds the website fake data**. Every session you get a different fake identity. Trackers think you're a different person every time. Fingerprinting-based tracking breaks completely.
 
 ---
