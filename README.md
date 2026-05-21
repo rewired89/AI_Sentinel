@@ -211,14 +211,30 @@ python3 -m privacy.privacy_main --setup-certs
 # macOS:   uses 'sudo security add-trusted-cert' against System.keychain
 ```
 
-### Environment variables (`.env` or shell)
+### API keys — bring your own
 
-| Variable | Purpose |
-|---|---|
-| `VIRUSTOTAL_API_KEY` | VirusTotal v3 domain lookups (free tier: 500 req/day) |
-| `ALIENVAULT_API_KEY` | AlienVault OTX pulse lookups (free) |
+AI Sentinel uses external APIs for its smarter features. **Each user must supply their own keys.** There is no shared key — that would mean one person's usage bill paying for everyone else.
 
-Without API keys, domain reputation checks are skipped. C2 heuristics, fingerprint poisoning, and de-anonymization scanning still work without any keys.
+Create a file called `.env` inside the `app/` folder:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+VIRUSTOTAL_API_KEY=...
+ALIENVAULT_API_KEY=...
+```
+
+| Variable | Purpose | Where to get it |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Powers the AI threat analysis — Claude reads new malware IOCs and writes your detection rules | console.anthropic.com → API Keys |
+| `VIRUSTOTAL_API_KEY` | Per-domain reputation lookups (free tier: 500 req/day) | virustotal.com → Join for free |
+| `ALIENVAULT_API_KEY` | AlienVault OTX pulse feed — richer threat context | otx.alienvault.com → Join for free |
+
+**None of these are required to run AI Sentinel.** Without them:
+- Threat feeds (URLhaus, ThreatFox, FeodoTracker) still update blocklists every hour — free, no key needed
+- C2 heuristics, fingerprint poisoning, and de-anonymization scanning still work fully
+- You just don't get the Claude-powered rule analysis or the VT/OTX per-domain checks on top
+
+The `ANTHROPIC_API_KEY` unlocks the most value — Claude takes the raw list of new malware servers and generates smarter, context-aware blocking rules instead of just adding raw IPs to a list.
 
 ### Building the standalone app
 

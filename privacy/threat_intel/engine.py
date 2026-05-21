@@ -22,6 +22,7 @@ With API keys (set in app/.env):
   - OTX AlienVault — full pulse feed, richer context
   - VirusTotal     — per-domain reputation on demand
 """
+import re
 import json
 import time
 import threading
@@ -228,19 +229,98 @@ def _filter_new(iocs: list[dict], state: dict) -> list[dict]:
 # Claude API — analyse threats and generate detection rules
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# IOC sanitisation — strip free-text before it reaches Claude
+# ---------------------------------------------------------------------------
+
+_RE_DOMAIN = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+$")
+_RE_IP     = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def _sanitise_iocs(iocs: list[dict]) -> list[dict]:
+    """
+    Keep only type + value. Drop description/tags/source — those come from
+    external parties and could contain prompt-injection payloads.
+    Also validate that values look like real domains or IPs.
+    """
+    clean = []
+    for ioc in iocs:
+        t = ioc.get("type", "")
+        v = str(ioc.get("value", "")).strip().lower()
+        if t == "domain" and _RE_DOMAIN.match(v) and len(v) <= 253:
+            clean.append({"type": "domain", "value": v})
+        elif t == "ip" and _RE_IP.match(v):
+            clean.append({"type": "ip", "value": v})
+    return clean
+
+
+# ---------------------------------------------------------------------------
+# Output validation — only accept well-formed values from Claude's response
+# ---------------------------------------------------------------------------
+
+_RE_UA_PATH = re.compile(r"^[\x20-\x7E]{1,120}$")   # printable ASCII, sane length
+
+
+def _validate_rules(raw: dict) -> dict:
+    """
+    Strictly whitelist every value Claude returns.
+    Anything that doesn't look right is silently dropped.
+    This ensures a compromised/confused Claude response can't inject
+    arbitrary strings into the proxy's block lists.
+    """
+    def _clean_domains(lst) -> list[str]:
+        if not isinstance(lst, list):
+            return []
+        return [v for v in lst if isinstance(v, str) and _RE_DOMAIN.match(v.strip().lower()) and len(v) <= 253]
+
+    def _clean_ips(lst) -> list[str]:
+        if not isinstance(lst, list):
+            return []
+        return [v for v in lst if isinstance(v, str) and _RE_IP.match(v.strip())]
+
+    def _clean_patterns(lst) -> list[str]:
+        if not isinstance(lst, list):
+            return []
+        return [v for v in lst if isinstance(v, str) and _RE_UA_PATH.match(v)]
+
+    summary = raw.get("summary", "")
+    if not isinstance(summary, str):
+        summary = ""
+    summary = summary[:200]   # cap length, no newlines accepted
+    summary = summary.replace("\n", " ").replace("\r", "")
+
+    return {
+        "block_domains":           _clean_domains(raw.get("block_domains", [])),
+        "block_ips":               _clean_ips(raw.get("block_ips", [])),
+        "block_ua_patterns":       _clean_patterns(raw.get("block_ua_patterns", [])),
+        "block_path_patterns":     _clean_patterns(raw.get("block_path_patterns", [])),
+        "block_response_patterns": _clean_patterns(raw.get("block_response_patterns", [])),
+        "summary":                 summary,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Claude API — analyse threats and generate detection rules
+# ---------------------------------------------------------------------------
+
 def _ask_claude(new_iocs: list[dict]) -> dict | None:
     api_key = __import__("os").getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         _log("ANTHROPIC_API_KEY not set — skipping AI rule generation.")
         return None
 
-    sample = new_iocs[:80]   # keep prompt small; Claude handles the important ones
+    # Strip free-text fields before they reach Claude.
+    # External feed descriptions/tags are untrusted and could contain
+    # prompt-injection payloads crafted by attackers to manipulate the output.
+    safe_iocs = _sanitise_iocs(new_iocs[:80])
+    if not safe_iocs:
+        return None
 
     prompt = f"""You are a malware analyst writing detection rules for a Python mitmproxy addon called AI Sentinel.
 
-New threat intelligence just arrived. Analyse these IOCs and generate detection rules:
+Here are {len(safe_iocs)} new threat IOCs (type + value only):
 
-{json.dumps(sample, indent=2)}
+{json.dumps(safe_iocs, indent=2)}
 
 Return ONLY a JSON object with this exact structure (no explanation, no markdown):
 {{
@@ -258,10 +338,10 @@ Rules:
 - block_path_patterns: URL path substrings used by C2/malware panels
 - block_response_patterns: JS/HTML snippets that appear in malicious payloads
 - Keep each list under 50 entries — quality over quantity
+- All values must be plain ASCII strings — no code, no instructions
 """
 
     try:
-        import urllib.request, json
         body = json.dumps({
             "model":      "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
@@ -279,12 +359,14 @@ Rules:
         with urllib.request.urlopen(req, timeout=30) as r:
             resp = json.loads(r.read())
         text = resp["content"][0]["text"].strip()
-        # strip markdown code fences if Claude added them
+        # Strip markdown fences if present
         if text.startswith("```"):
             text = "\n".join(text.split("\n")[1:])
         if text.endswith("```"):
             text = "\n".join(text.split("\n")[:-1])
-        rules = json.loads(text)
+        raw_rules = json.loads(text)
+        # Validate and whitelist every value — never trust raw AI output directly
+        rules = _validate_rules(raw_rules)
         _log(f"Claude generated rules: {rules.get('summary', '')}")
         return rules
     except Exception as e:
