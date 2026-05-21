@@ -29,6 +29,66 @@ from privacy.proxy.deanon_detector import scan_response_body
 from privacy.proxy.poison_injector import inject as _poison_inject
 from privacy.alerts import notify, notify_deanon
 
+# ---------------------------------------------------------------------------
+# AI-generated rules — loaded from data/ai_rules.json, hot-reloaded on change
+# ---------------------------------------------------------------------------
+
+_AI_RULES_FILE  = ROOT / "data" / "ai_rules.json"
+_ai_rules_lock  = threading.Lock()
+_ai_rules_mtime = 0.0
+_ai_rules: dict = {
+    "block_domains":           [],
+    "block_ips":               [],
+    "block_ua_patterns":       [],
+    "block_path_patterns":     [],
+    "block_response_patterns": [],
+}
+
+
+def _reload_ai_rules() -> None:
+    """Reload data/ai_rules.json if it has changed on disk."""
+    global _ai_rules_mtime, _ai_rules
+    try:
+        mtime = _AI_RULES_FILE.stat().st_mtime
+        if mtime <= _ai_rules_mtime:
+            return
+        rules = json.loads(_AI_RULES_FILE.read_text())
+        with _ai_rules_lock:
+            _ai_rules       = rules
+            _ai_rules_mtime = mtime
+        ctx.log.info(
+            f"[sentinel] AI rules reloaded — "
+            f"{len(rules.get('block_domains', []))} domains, "
+            f"{len(rules.get('block_ips', []))} IPs"
+        )
+    except Exception:
+        pass
+
+
+def _ai_block_domains() -> list[str]:
+    with _ai_rules_lock:
+        return _ai_rules.get("block_domains", [])
+
+
+def _ai_block_ips() -> list[str]:
+    with _ai_rules_lock:
+        return _ai_rules.get("block_ips", [])
+
+
+def _ai_block_ua_patterns() -> list[str]:
+    with _ai_rules_lock:
+        return _ai_rules.get("block_ua_patterns", [])
+
+
+def _ai_block_path_patterns() -> list[str]:
+    with _ai_rules_lock:
+        return _ai_rules.get("block_path_patterns", [])
+
+
+def _ai_block_response_patterns() -> list[str]:
+    with _ai_rules_lock:
+        return _ai_rules.get("block_response_patterns", [])
+
 def _tray_threat(host: str = "") -> None:
     """Increment blocked counter, flash tray red for 30 s, then restore."""
     try:
@@ -114,12 +174,51 @@ def _otx_check_domain(domain: str) -> bool:
     return False
 
 
+def _urlhaus_check_domain(domain: str) -> bool:
+    """URLhaus — free, no API key. Checks if domain hosts malware."""
+    try:
+        import requests as _req
+        r = _req.post(
+            "https://urlhaus-api.abuse.ch/v1/host/",
+            data={"host": domain},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("query_status") == "is_host" and data.get("urls_count", 0) > 0
+    except Exception:
+        pass
+    return False
+
+
+def _threatfox_check_domain(domain: str) -> bool:
+    """ThreatFox — free, no API key. Checks domain against IOC database."""
+    try:
+        import requests as _req
+        r = _req.post(
+            "https://threatfox-api.abuse.ch/api/v1/",
+            json={"query": "search_ioc", "search_term": domain},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("query_status") == "ok" and len(data.get("data", [])) > 0
+    except Exception:
+        pass
+    return False
+
+
 def _background_check(domain: str) -> None:
-    """Fetch reputation in a daemon thread and populate cache for future requests."""
-    result = _vt_check_domain(domain) or _otx_check_domain(domain)
+    """Check domain against all available threat intel sources (background thread)."""
+    result = (
+        _urlhaus_check_domain(domain)    # always active — no key needed
+        or _threatfox_check_domain(domain)  # always active — no key needed
+        or _vt_check_domain(domain)      # active when VIRUSTOTAL_API_KEY is set
+        or _otx_check_domain(domain)     # active when ALIENVAULT_API_KEY is set
+    )
     _cache_set(domain, result)
     if result:
-        ctx.log.warn(f"[sentinel] Background check: {domain} flagged as malicious — will block on next request.")
+        ctx.log.warn(f"[sentinel] Threat confirmed: {domain} — will block on next request.")
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +273,9 @@ def _log_threat(entry: dict) -> None:
 class SentinelProxyAddon:
 
     def request(self, flow: http.HTTPFlow) -> None:
+        # Hot-reload AI rules if the file changed
+        _reload_ai_rules()
+
         host = flow.request.pretty_host
         url  = flow.request.pretty_url
 
@@ -185,8 +287,49 @@ class SentinelProxyAddon:
         except ValueError:
             pass  # hostname — proceed
 
-        # --- C2 beacon check ---
-        if _is_c2_beacon(flow):
+        # --- AI-generated domain blocklist ---
+        if host in _ai_block_domains():
+            ctx.log.warn(f"[sentinel] AI-blocked domain: {host}")
+            _log_threat({
+                "type": "ai_blocked_domain",
+                "url": url,
+                "host": host,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
+            notify("malicious_domain", extra={"url": url, "host": host})
+            _tray_threat(host)
+            flow.response = http.Response.make(
+                403,
+                f"AI Sentinel: {host} blocked by threat intelligence.".encode(),
+                {"Content-Type": "text/plain"},
+            )
+            return
+
+        # --- AI-generated IP blocklist ---
+        if host in _ai_block_ips():
+            ctx.log.warn(f"[sentinel] AI-blocked IP: {host}")
+            _log_threat({
+                "type": "ai_blocked_ip",
+                "url": url,
+                "host": host,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
+            notify("malicious_domain", extra={"url": url, "host": host})
+            _tray_threat(host)
+            flow.response = http.Response.make(
+                403,
+                f"AI Sentinel: {host} blocked by threat intelligence.".encode(),
+                {"Content-Type": "text/plain"},
+            )
+            return
+
+        # --- C2 beacon check (hardcoded + AI patterns) ---
+        ua   = (flow.request.headers.get("user-agent") or "").lower()
+        path = flow.request.path.lower()
+        ai_ua_hit   = any(p in ua   for p in _ai_block_ua_patterns())
+        ai_path_hit = any(p in path for p in _ai_block_path_patterns())
+
+        if _is_c2_beacon(flow) or ai_ua_hit or ai_path_hit:
             ctx.log.warn(f"[sentinel] C2 beacon blocked: {url}")
             _log_threat({
                 "type": "c2_beacon",
@@ -256,6 +399,26 @@ class SentinelProxyAddon:
                 flow.response.headers.pop("content-length", None)
             except Exception as exc:
                 ctx.log.debug(f"[sentinel] Poison inject failed: {exc}")
+
+        # --- AI-generated response body patterns ---
+        for pattern in _ai_block_response_patterns():
+            if pattern and pattern in body:
+                host = flow.request.pretty_host
+                ctx.log.warn(f"[sentinel] AI-blocked malicious payload from {host}: {pattern[:40]}")
+                _log_threat({
+                    "type":    "ai_blocked_payload",
+                    "host":    host,
+                    "url":     flow.request.pretty_url,
+                    "pattern": pattern[:80],
+                    "ts":      datetime.now(timezone.utc).isoformat(),
+                })
+                _tray_threat(host)
+                flow.response = http.Response.make(
+                    403,
+                    b"AI Sentinel: Malicious payload blocked.",
+                    {"Content-Type": "text/plain"},
+                )
+                return
 
         findings = scan_response_body(body, url=flow.request.pretty_url)
         if not findings:

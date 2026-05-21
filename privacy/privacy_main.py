@@ -59,6 +59,7 @@ from privacy.routing import nym_client as _nym
 from privacy.routing import i2p_client as _i2p
 from privacy.tray import TrayState
 import privacy.tray as _tray
+import privacy.threat_intel as _threat_intel
 
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT  = 8877
@@ -458,6 +459,12 @@ def main() -> None:
     # One notification when everything is ready — no separate "starting" notification
     _show_startup_notification(routing_label if upstream else None)
 
+    # Start autonomous AI threat intelligence engine (background, daemon thread)
+    # Fetches IOCs from URLhaus / ThreatFox / FeodoTracker every hour,
+    # sends new ones to Claude API, Claude generates detection rules → data/ai_rules.json
+    # Proxy hot-reloads the rules automatically — no user action needed.
+    _threat_intel.start()
+
     print(f"""
 [privacy] ACTIVE
   Scanning proxy  : {PROXY_HOST}:{args.proxy_port}
@@ -472,6 +479,7 @@ def main() -> None:
     # 7. Graceful shutdown on SIGINT / SIGTERM
     def _shutdown(sig, _frame):
         print("\n[privacy] Shutting down ...")
+        _threat_intel.stop()
         _tray.stop()
         _clear_system_proxy()
         proxy.terminate()

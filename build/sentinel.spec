@@ -61,6 +61,9 @@ a = Analysis(
         'plyer.platforms.win.notification',
         'plyer.platforms.macosx',
         'plyer.platforms.macosx.notification',
+        # threat intel engine
+        'privacy.threat_intel',
+        'privacy.threat_intel.engine',
         # other deps
         'requests',
         'dotenv',
