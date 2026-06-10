@@ -3,9 +3,11 @@ import os
 import time
 import threading
 from datetime import datetime
+from pathlib import Path
 
 # Scanners (package-relative)
 from app.detect_anomalies import scan_once as malware_scan_once
+from app.file_scanner import scan_directory as _scan_dir, FileScanResult
 try:
     from app.detect_anomalies import list_suspects  # optional; may not exist
 except Exception:
@@ -103,14 +105,54 @@ def maybe_temp_offline_on_failure(has_failures: bool):
         print("ℹ️  Staying online. Monitoring continues.")
 
 # ------------------ Core ------------------
+def _file_scan_pass() -> int:
+    """
+    Scan the quarantine directory and common high-risk locations for malicious files.
+    Returns the count of suspicious/dangerous files found.
+    """
+    scan_targets: list[Path] = []
+
+    # Always scan the quarantine directory
+    quarantine = Path("data/quarantine")
+    if quarantine.exists():
+        scan_targets.append(quarantine)
+
+    # Platform-specific high-risk paths
+    home = Path.home()
+    candidates = [
+        home / "Downloads",
+        Path(os.getenv("TEMP", "")) if os.name == "nt" else Path("/tmp"),
+        Path(os.getenv("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup",
+    ]
+    for p in candidates:
+        if p.exists() and p.is_dir():
+            scan_targets.append(p)
+
+    findings: list[FileScanResult] = []
+    for target in scan_targets:
+        try:
+            findings.extend(_scan_dir(target))
+        except Exception as e:
+            print(f"[AI Sentinel] File scan error in {target}: {e}")
+
+    for f in findings:
+        level = "DANGEROUS" if f.risk == "dangerous" else "SUSPICIOUS"
+        print(f"[File Scanner] {level}: {f.path}")
+        for reason in f.reasons:
+            print(f"  - {reason}")
+
+    return len(findings)
+
+
 def run_full_pass_counts() -> dict:
-    counts = {"process": 0, "ip": 0, "otx": 0, "domain": 0, "ports": 0, "behavior": 0}
+    counts = {"process": 0, "ip": 0, "otx": 0, "domain": 0, "ports": 0, "behavior": 0, "files": 0}
     counts["process"]  = int(malware_scan_once() or 0)
     counts["ip"]       = 1 if ip_scan_once() else 0
     counts["otx"]      = 1 if otx_scan_once() else 0
     counts["domain"]   = 1 if domain_scan_once() else 0
     counts["ports"]    = 1 if port_scan_once() else 0
     counts["behavior"] = 1 if behavior_scan_once() else 0
+    counts["files"]    = _file_scan_pass()
     counts["total"]    = sum(v for k, v in counts.items() if k != "total")
     return counts
 

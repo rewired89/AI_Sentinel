@@ -28,6 +28,7 @@ from mitmproxy import http, ctx
 from privacy.proxy.deanon_detector import scan_response_body
 from privacy.proxy.poison_injector import inject as _poison_inject
 from privacy.alerts import notify, notify_deanon
+from app.file_scanner import scan_bytes as _scan_bytes
 
 # ---------------------------------------------------------------------------
 # AI-generated rules — loaded from data/ai_rules.json, hot-reloaded on change
@@ -370,7 +371,71 @@ class SentinelProxyAddon:
             threading.Thread(target=_background_check, args=(host,), daemon=True).start()
         # cached is False → known clean, allow silently
 
+    def _check_download(self, flow: http.HTTPFlow) -> bool:
+        """
+        Scan binary file downloads for malicious content.
+        Returns True and blocks the response if the file is dangerous.
+        Skips HTML/JS (handled elsewhere) and files larger than 10 MB.
+        """
+        ct = flow.response.headers.get("content-type", "").lower()
+        if "html" in ct or "javascript" in ct or "text/" in ct:
+            return False
+
+        raw = flow.response.raw_content
+        if not raw or len(raw) > 10_000_000:
+            return False
+
+        # Derive filename from Content-Disposition or URL path
+        cd = flow.response.headers.get("content-disposition", "")
+        filename = ""
+        if "filename=" in cd:
+            part = cd.split("filename=")[-1].strip().strip('"').strip("'")
+            filename = Path(part).name
+        if not filename:
+            filename = Path(flow.request.path).name
+
+        result = _scan_bytes(raw, filename)
+        if result.risk == "clean":
+            return False
+
+        host = flow.request.pretty_host
+        url  = flow.request.pretty_url
+        ctx.log.warn(
+            f"[sentinel] Malicious download from {host}: {result.risk} — "
+            + "; ".join(result.reasons)
+        )
+        _log_threat({
+            "type":     f"malicious_download_{result.risk}",
+            "host":     host,
+            "url":      url,
+            "filename": filename,
+            "magic":    result.magic_type,
+            "entropy":  result.entropy,
+            "reasons":  result.reasons,
+            "ts":       datetime.now(timezone.utc).isoformat(),
+        })
+        notify("malicious_domain", extra={"url": url, "host": host})
+        _tray_threat(host)
+
+        if result.risk == "dangerous":
+            flow.response = http.Response.make(
+                403,
+                f"AI Sentinel: download blocked — {'; '.join(result.reasons)}".encode(),
+                {"Content-Type": "text/plain"},
+            )
+            return True
+
+        # 'suspicious' — let it through but flag via header so the extension can warn
+        flow.response.headers["X-Sentinel-Warning"] = (
+            "suspicious_download:" + ",".join(result.reasons)[:200]
+        )
+        return False
+
     def response(self, flow: http.HTTPFlow) -> None:
+        # Scan binary downloads first — blocks dangerous files before any further processing
+        if self._check_download(flow):
+            return
+
         # Only scan JS and HTML — skip images, fonts, binary assets
         ct = flow.response.headers.get("content-type", "")
         if "javascript" not in ct and "html" not in ct:

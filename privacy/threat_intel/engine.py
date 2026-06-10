@@ -30,6 +30,9 @@ import hashlib
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from app.code_validator import validate_pattern as _validate_pattern
 
 ROOT            = Path(__file__).parent.parent.parent
 _RULES_FILE     = ROOT / "data" / "ai_rules.json"
@@ -281,7 +284,16 @@ def _validate_rules(raw: dict) -> dict:
     def _clean_patterns(lst) -> list[str]:
         if not isinstance(lst, list):
             return []
-        return [v for v in lst if isinstance(v, str) and _RE_UA_PATH.match(v)]
+        safe = []
+        for v in lst:
+            if not isinstance(v, str):
+                continue
+            if not _RE_UA_PATH.match(v):
+                continue
+            ok, _ = _validate_pattern(v)
+            if ok:
+                safe.append(v)
+        return safe
 
     summary = raw.get("summary", "")
     if not isinstance(summary, str):
